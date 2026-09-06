@@ -1,3 +1,4 @@
+import { StoryBiblePage } from "./pages/StoryBiblePage";
 import { useState, useEffect, useCallback } from "react";
 import { HomePage } from "./pages/HomePage";
 import { WorldPage } from "./pages/WorldPage";
@@ -13,6 +14,7 @@ import { AIAssistant } from "./components/AIAssistant";
 export type Page =
   | "home"
   | "world"
+  | "storyBible"
   | "characters"
   | "monsters"
   | "locations"
@@ -36,18 +38,16 @@ export default function App() {
   const [activeWorld, setActiveWorld] = useState<World | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchWorlds = useCallback(async () => {
-    try {
-      const res = await fetch("/api/worlds?userId=demo-user");
-      if (res.ok) {
-        const data = await res.json();
-        setWorlds(data);
-      }
-    } catch {
-      // API not yet available — use empty state
-    }
-    setLoading(false);
-  }, []);
+const fetchWorlds = useCallback(() => {
+  try {
+    const saved = localStorage.getItem("storyforge-worlds");
+    setWorlds(saved ? JSON.parse(saved) : []);
+  } catch {
+    setWorlds([]);
+  }
+
+  setLoading(false);
+}, []);
 
   useEffect(() => {
     fetchWorlds();
@@ -106,8 +106,6 @@ export default function App() {
         <div className="top-bar">
           <h1>
             {page === "home" && "What are we building today?"}
-            {page === "world" && activeWorld?.name || ""}
-            {page === "characters" && "Character Archive"}
             {page === "monsters" && "Monster & Creature Archive"}
             {page === "locations" && "Location & World Archive"}
             {page === "lore" && "Lore Archive"}
@@ -126,9 +124,12 @@ export default function App() {
           {page === "home" && (
             <HomePage worlds={worlds} loading={loading} onOpenWorld={openWorld} onWorldCreated={fetchWorlds} />
           )}
-          {page === "world" && activeWorld && <WorldPage world={activeWorld} />}
-          {page === "characters" && activeWorld && <CharacterPage worldId={activeWorld.id} />}
-          {page === "monsters" && activeWorld && <MonsterPage worldId={activeWorld.id} />}
+{page === "world" && activeWorld && (
+  <WorldPage world={activeWorld} onNavigate={setPage} />
+)}          {page === "characters" && activeWorld && <CharacterPage worldId={activeWorld.id} />}
+{page === "storyBible" && activeWorld && (
+  <StoryBiblePage world={activeWorld} />
+)}          {page === "monsters" && activeWorld && <MonsterPage worldId={activeWorld.id} />}
           {page === "locations" && activeWorld && <LocationPage worldId={activeWorld.id} />}
           {page === "lore" && activeWorld && <LorePage worldId={activeWorld.id} />}
           {page === "maps" && activeWorld && <MapPage worldId={activeWorld.id} />}
