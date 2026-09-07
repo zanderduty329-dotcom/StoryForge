@@ -10,6 +10,14 @@ level: number;
 notes?: string;
 description?: string;
 personality?: string;
+
+inventory?: {
+  id: string;
+  name: string;
+  quantity: number;
+  description?: string;
+}[];
+
 stats?: {
   health: number;
   armor: number;
@@ -59,6 +67,15 @@ export function CharacterPage({ worldId }: { worldId: string }) {
 const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const storageKey = `storyforge-characters-${worldId}`;
   const [name, setName] = useState("");
+
+const [itemName, setItemName] = useState("");
+const [itemQuantity, setItemQuantity] = useState(1);
+const [itemDescription, setItemDescription] = useState("");
+const [showStats, setShowStats] = useState(true);
+const [showInventory, setShowInventory] = useState(true);
+const [showDescription, setShowDescription] = useState(true);
+const [showPersonality, setShowPersonality] = useState(true);
+const [showNotes, setShowNotes] = useState(true);
   useEffect(() => {
   try {
 const saved = localStorage.getItem(storageKey);
@@ -67,6 +84,7 @@ const parsed: Character[] = saved ? JSON.parse(saved) : [];
 const upgraded = parsed.map((character) => ({
   ...character,
 level: character.level ?? 1,
+inventory: character.inventory ?? [],
   stats: character.stats ?? {
     health: 10,
     armor: 10,
@@ -97,6 +115,7 @@ const [kind, setKind] = useState<"player" | "npc">("player");
       role,
       kind,
 level: 1,
+inventory: [],
 stats: {
   health: 10,
   armor: 10,
@@ -176,26 +195,34 @@ const updateStat = (
         onChange={(event) => setName(event.target.value)}
       />
 
-      <div style={{ marginTop: "12px" }}>
-        <select
-          value={ancestry}
-          onChange={(event) => setAncestry(event.target.value)}
-        >
-          {ancestries.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-      </div>
-      <div style={{ marginTop: "12px" }}>
-        <select
-          value={role}
-          onChange={(event) => setRole(event.target.value)}
-        >
-          {roles.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-      </div>
+<div style={{ marginTop: "12px" }}>
+  <input
+    list="creator-ancestry-options"
+    value={ancestry}
+    onChange={(event) => setAncestry(event.target.value)}
+    placeholder="Ancestry"
+  />
+
+  <datalist id="creator-ancestry-options">
+    {ancestries.map((item) => (
+      <option key={item} value={item} />
+    ))}
+  </datalist>
+</div>
+<div style={{ marginTop: "12px" }}>
+  <input
+    list="creator-role-options"
+    value={role}
+    onChange={(event) => setRole(event.target.value)}
+    placeholder="Role / Class"
+  />
+
+  <datalist id="creator-role-options">
+    {roles.map((item) => (
+      <option key={item} value={item} />
+    ))}
+  </datalist>
+</div>
       <div style={{ marginTop: "16px" }}>
         <button className="btn" onClick={createCharacter}>
           + Create Character
@@ -309,9 +336,40 @@ const updateStat = (
   </datalist>
 </label>
 
-          <p>
-            <strong>Role:</strong> {selectedCharacter.role}
-          </p>
+<label>
+  <strong>Role/Class:</strong>
+  <input
+    list="role-options"
+    value={selectedCharacter.role}
+    onChange={(event) => {
+      const updatedCharacter = {
+        ...selectedCharacter,
+        role: event.target.value,
+      };
+
+      setSelectedCharacter(updatedCharacter);
+
+      setCharacters((old) => {
+        const updated = old.map((character) =>
+          character.id === updatedCharacter.id
+            ? updatedCharacter
+            : character
+        );
+
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        return updated;
+      });
+    }}
+    style={{ marginLeft: "8px" }}
+  />
+
+  <datalist id="role-options">
+    {roles.map((item) => (
+      <option key={item} value={item} />
+    ))}
+  </datalist>
+</label>
+
 <label>
   <strong>Level:</strong>
   <input
@@ -342,7 +400,14 @@ const updateStat = (
 </label>
 {selectedCharacter.stats && (
   <div style={{ marginTop: "20px" }}>
-    <h3>Stats</h3>
+<button
+  className="btn"
+  onClick={() => setShowStats((old) => !old)}
+>
+  {showStats ? "▼" : "▶"} Stats
+</button>
+{showStats && (
+  <div style={{ marginTop: "12px" }}>
 
 <label>
   ❤️ Health:
@@ -478,9 +543,246 @@ const updateStat = (
     style={{ marginLeft: "8px", width: "80px" }}
   />
 </label>
+
   </div>
-)}<textarea
-  value={selectedCharacter.description || ""}
+)}
+</div>
+)}
+
+<div style={{ marginTop: "20px" }}>
+<button
+  className="btn"
+  onClick={() => setShowInventory((old) => !old)}
+>
+  {showInventory ? "▼" : "▶"} Inventory & Equipment
+</button>
+{showInventory && (
+  <div style={{ marginTop: "12px" }}>
+
+  <input
+    value={itemName}
+    onChange={(event) => setItemName(event.target.value)}
+    placeholder="Item name"
+  />
+
+  <input
+    type="number"
+    min="1"
+    value={itemQuantity}
+    onChange={(event) => setItemQuantity(Number(event.target.value))}
+    style={{ marginLeft: "8px", width: "70px" }}
+  />
+
+  <input
+    value={itemDescription}
+    onChange={(event) => setItemDescription(event.target.value)}
+    placeholder="Short description"
+    style={{ marginLeft: "8px" }}
+  />
+<button
+  className="btn"
+  onClick={() => {
+    if (!itemName.trim()) return;
+
+    const newItem = {
+      id: crypto.randomUUID(),
+      name: itemName.trim(),
+      quantity: Math.max(1, itemQuantity),
+      description: itemDescription.trim(),
+    };
+
+    const updatedCharacter = {
+      ...selectedCharacter,
+      inventory: [...(selectedCharacter.inventory ?? []), newItem],
+    };
+
+    setSelectedCharacter(updatedCharacter);
+
+    setCharacters((old) => {
+      const updated = old.map((character) =>
+        character.id === updatedCharacter.id
+          ? updatedCharacter
+          : character
+      );
+
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      return updated;
+    });
+
+    setItemName("");
+    setItemQuantity(1);
+    setItemDescription("");
+  }}
+  style={{ marginLeft: "8px" }}
+>
+  Add Item
+</button>
+
+{(selectedCharacter.inventory ?? []).map((item) => (
+  <div
+    key={item.id}
+    style={{
+      marginTop: "12px",
+      padding: "10px",
+      border: "1px solid var(--border)",
+      borderRadius: "8px",
+    }}
+  >
+    <input
+      value={item.name}
+      onChange={(event) => {
+        const updatedInventory = (selectedCharacter.inventory ?? []).map(
+          (inventoryItem) =>
+            inventoryItem.id === item.id
+              ? { ...inventoryItem, name: event.target.value }
+              : inventoryItem
+        );
+
+        const updatedCharacter = {
+          ...selectedCharacter,
+          inventory: updatedInventory,
+        };
+
+        setSelectedCharacter(updatedCharacter);
+
+        setCharacters((old) => {
+          const updated = old.map((character) =>
+            character.id === updatedCharacter.id
+              ? updatedCharacter
+              : character
+          );
+
+          localStorage.setItem(storageKey, JSON.stringify(updated));
+          return updated;
+        });
+      }}
+    />
+<input
+  type="number"
+  min="1"
+  value={item.quantity}
+  onChange={(event) => {
+    const updatedInventory = (selectedCharacter.inventory ?? []).map(
+      (inventoryItem) =>
+        inventoryItem.id === item.id
+          ? {
+              ...inventoryItem,
+              quantity: Math.max(1, Number(event.target.value)),
+            }
+          : inventoryItem
+    );
+
+    const updatedCharacter = {
+      ...selectedCharacter,
+      inventory: updatedInventory,
+    };
+
+    setSelectedCharacter(updatedCharacter);
+
+    setCharacters((old) => {
+      const updated = old.map((character) =>
+        character.id === updatedCharacter.id
+          ? updatedCharacter
+          : character
+      );
+
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      return updated;
+    });
+  }}
+  style={{ marginLeft: "8px", width: "70px" }}
+/>
+
+<textarea
+  value={item.description || ""}
+  onChange={(event) => {
+    const updatedInventory = (selectedCharacter.inventory ?? []).map(
+      (inventoryItem) =>
+        inventoryItem.id === item.id
+          ? {
+              ...inventoryItem,
+              description: event.target.value,
+            }
+          : inventoryItem
+    );
+
+    const updatedCharacter = {
+      ...selectedCharacter,
+      inventory: updatedInventory,
+    };
+
+    setSelectedCharacter(updatedCharacter);
+
+    setCharacters((old) => {
+      const updated = old.map((character) =>
+        character.id === updatedCharacter.id
+          ? updatedCharacter
+          : character
+      );
+
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      return updated;
+    });
+  }}
+  placeholder="Item description"
+  rows={3}
+  style={{
+    display: "block",
+    width: "100%",
+    marginTop: "8px",
+    padding: "8px",
+    borderRadius: "8px",
+    resize: "vertical",
+  }}
+/>
+
+<button
+  className="btn"
+  onClick={() => {
+    const updatedCharacter = {
+      ...selectedCharacter,
+      inventory: (selectedCharacter.inventory ?? []).filter(
+        (inventoryItem) => inventoryItem.id !== item.id
+      ),
+    };
+
+    setSelectedCharacter(updatedCharacter);
+
+    setCharacters((old) => {
+      const updated = old.map((character) =>
+        character.id === updatedCharacter.id
+          ? updatedCharacter
+          : character
+      );
+
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      return updated;
+    });
+  }}
+  style={{ marginLeft: "8px" }}
+>
+  Remove Item
+</button>
+
+    </div>
+  ))}
+
+  </div>
+)}
+
+</div>
+<div style={{ marginTop: "20px" }}>
+  <button
+    className="btn"
+    onClick={() => setShowDescription((old) => !old)}
+  >
+    {showDescription ? "▼" : "▶"} Description
+  </button>
+
+{showDescription && (
+  <div style={{ marginTop: "12px" }}>
+<textarea
+    value={selectedCharacter.description || ""}
   placeholder="Description"
   onChange={(event) => {
     const updatedCharacter = {
@@ -509,6 +811,19 @@ const updateStat = (
     borderRadius: "8px",
   }}
 />
+  </div>
+)}
+</div>
+<div style={{ marginTop: "20px" }}>
+  <button
+    className="btn"
+    onClick={() => setShowPersonality((old) => !old)}
+  >
+    {showPersonality ? "▼" : "▶"} Personality
+  </button>
+
+{showPersonality && (
+    <div style={{ marginTop: "12px" }}>
 <textarea
   value={selectedCharacter.personality || ""}
   placeholder="Personality"
@@ -539,8 +854,19 @@ const updateStat = (
     borderRadius: "8px",
   }}
 />
+    </div>
+  )}
+</div>
+<div style={{ marginTop: "20px" }}>
+  <button
+    className="btn"
+    onClick={() => setShowNotes((old) => !old)}
+  >
+    {showNotes ? "▼" : "▶"} Notes
+  </button>
 
-
+  {showNotes && (
+    <div style={{ marginTop: "12px" }}>
  <textarea
   value={selectedCharacter.notes || ""}
   placeholder="Notes"
@@ -571,6 +897,9 @@ const updateStat = (
     borderRadius: "8px",
   }}
 />
+    </div>
+  )}
+</div>
 
 <button
   className="btn"

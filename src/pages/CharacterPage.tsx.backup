@@ -5,10 +5,19 @@ type Character = {
   name: string;
   ancestry: string;
    role: string; 
-  kind: "player" | "npc";
- notes?: string;
+kind: "player" | "npc";
+level: number;
+notes?: string;
 description?: string;
 personality?: string;
+
+inventory?: {
+  id: string;
+  name: string;
+  quantity: number;
+  description?: string;
+}[];
+
 stats?: {
   health: number;
   armor: number;
@@ -58,10 +67,35 @@ export function CharacterPage({ worldId }: { worldId: string }) {
 const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const storageKey = `storyforge-characters-${worldId}`;
   const [name, setName] = useState("");
+
+const [itemName, setItemName] = useState("");
+const [itemQuantity, setItemQuantity] = useState(1);
+const [itemDescription, setItemDescription] = useState("");
+
   useEffect(() => {
   try {
-    const saved = localStorage.getItem(storageKey);
-    setCharacters(saved ? JSON.parse(saved) : []);
+const saved = localStorage.getItem(storageKey);
+const parsed: Character[] = saved ? JSON.parse(saved) : [];
+
+const upgraded = parsed.map((character) => ({
+  ...character,
+level: character.level ?? 1,
+inventory: character.inventory ?? [],
+  stats: character.stats ?? {
+    health: 10,
+    armor: 10,
+    damage: 1,
+    strength: 10,
+    dexterity: 10,
+    constitution: 10,
+    intelligence: 10,
+    wisdom: 10,
+    charisma: 10,
+  },
+}));
+
+setCharacters(upgraded);
+localStorage.setItem(storageKey, JSON.stringify(upgraded));
   } catch {
     setCharacters([]);
   }
@@ -76,6 +110,8 @@ const [kind, setKind] = useState<"player" | "npc">("player");
       ancestry,
       role,
       kind,
+level: 1,
+inventory: [],
 stats: {
   health: 10,
   armor: 10,
@@ -101,6 +137,33 @@ setCharacters((old) => {
     setAncestry(randomItem(ancestries.filter((item) => item !== "Custom")));
     setRole(randomItem(roles.filter((item) => item !== "Custom")));
   };
+const updateStat = (
+  stat: keyof NonNullable<Character["stats"]>,
+  value: number
+) => {
+  if (!selectedCharacter?.stats) return;
+
+  const updatedCharacter = {
+    ...selectedCharacter,
+    stats: {
+      ...selectedCharacter.stats,
+      [stat]: value,
+    },
+  };
+
+  setSelectedCharacter(updatedCharacter);
+
+  setCharacters((old) => {
+    const updated = old.map((character) =>
+      character.id === updatedCharacter.id
+        ? updatedCharacter
+        : character
+    );
+
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    return updated;
+  });
+};
   return (
     <div>
       <h2>🎭 Character Archive</h2>
@@ -128,26 +191,34 @@ setCharacters((old) => {
         onChange={(event) => setName(event.target.value)}
       />
 
-      <div style={{ marginTop: "12px" }}>
-        <select
-          value={ancestry}
-          onChange={(event) => setAncestry(event.target.value)}
-        >
-          {ancestries.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-      </div>
-      <div style={{ marginTop: "12px" }}>
-        <select
-          value={role}
-          onChange={(event) => setRole(event.target.value)}
-        >
-          {roles.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-      </div>
+<div style={{ marginTop: "12px" }}>
+  <input
+    list="creator-ancestry-options"
+    value={ancestry}
+    onChange={(event) => setAncestry(event.target.value)}
+    placeholder="Ancestry"
+  />
+
+  <datalist id="creator-ancestry-options">
+    {ancestries.map((item) => (
+      <option key={item} value={item} />
+    ))}
+  </datalist>
+</div>
+<div style={{ marginTop: "12px" }}>
+  <input
+    list="creator-role-options"
+    value={role}
+    onChange={(event) => setRole(event.target.value)}
+    placeholder="Role / Class"
+  />
+
+  <datalist id="creator-role-options">
+    {roles.map((item) => (
+      <option key={item} value={item} />
+    ))}
+  </datalist>
+</div>
       <div style={{ marginTop: "16px" }}>
         <button className="btn" onClick={createCharacter}>
           + Create Character
@@ -200,18 +271,361 @@ setCharacters((old) => {
             {selectedCharacter.kind === "npc" ? "👤 NPC Sheet" : "🎭 Character Sheet"}
           </h3>
 
-          <p>
-            <strong>Name:</strong> {selectedCharacter.name}
-          </p>
+<label>
+  <strong>Name:</strong>
+  <input
+    value={selectedCharacter.name}
+    onChange={(event) => {
+      const updatedCharacter = {
+        ...selectedCharacter,
+        name: event.target.value,
+      };
 
-          <p>
-            <strong>Ancestry:</strong> {selectedCharacter.ancestry}
-          </p>
+      setSelectedCharacter(updatedCharacter);
 
-          <p>
-            <strong>Role:</strong> {selectedCharacter.role}
-          </p>
+      setCharacters((old) => {
+        const updated = old.map((character) =>
+          character.id === updatedCharacter.id
+            ? updatedCharacter
+            : character
+        );
+
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        return updated;
+      });
+    }}
+    style={{ marginLeft: "8px" }}
+  />
+</label>
+
+<label>
+  <strong>Ancestry:</strong>
+  <input
+    list="ancestry-options"
+    value={selectedCharacter.ancestry}
+    onChange={(event) => {
+      const updatedCharacter = {
+        ...selectedCharacter,
+        ancestry: event.target.value,
+      };
+
+      setSelectedCharacter(updatedCharacter);
+
+      setCharacters((old) => {
+        const updated = old.map((character) =>
+          character.id === updatedCharacter.id
+            ? updatedCharacter
+            : character
+        );
+
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        return updated;
+      });
+    }}
+    style={{ marginLeft: "8px" }}
+  />
+
+  <datalist id="ancestry-options">
+    {ancestries.map((item) => (
+      <option key={item} value={item} />
+    ))}
+  </datalist>
+</label>
+
+<label>
+  <strong>Role/Class:</strong>
+  <input
+    list="role-options"
+    value={selectedCharacter.role}
+    onChange={(event) => {
+      const updatedCharacter = {
+        ...selectedCharacter,
+        role: event.target.value,
+      };
+
+      setSelectedCharacter(updatedCharacter);
+
+      setCharacters((old) => {
+        const updated = old.map((character) =>
+          character.id === updatedCharacter.id
+            ? updatedCharacter
+            : character
+        );
+
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        return updated;
+      });
+    }}
+    style={{ marginLeft: "8px" }}
+  />
+
+  <datalist id="role-options">
+    {roles.map((item) => (
+      <option key={item} value={item} />
+    ))}
+  </datalist>
+</label>
+
+<label>
+  <strong>Level:</strong>
+  <input
+    type="number"
+    min="1"
+    value={selectedCharacter.level}
+    onChange={(event) => {
+      const updatedCharacter = {
+        ...selectedCharacter,
+        level: Number(event.target.value),
+      };
+
+      setSelectedCharacter(updatedCharacter);
+
+      setCharacters((old) => {
+        const updated = old.map((character) =>
+          character.id === updatedCharacter.id
+            ? updatedCharacter
+            : character
+        );
+
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        return updated;
+      });
+    }}
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label>
+{selectedCharacter.stats && (
+  <div style={{ marginTop: "20px" }}>
+    <h3>Stats</h3>
+
+<label>
+  ❤️ Health:
+  <input
+    type="number"
+    value={selectedCharacter.stats.health}
+    onChange={(event) => {
+      const updatedCharacter = {
+        ...selectedCharacter,
+        stats: {
+          ...selectedCharacter.stats!,
+          health: Number(event.target.value),
+        },
+      };
+
+      setSelectedCharacter(updatedCharacter);
+
+      setCharacters((old) => {
+        const updated = old.map((character) =>
+          character.id === updatedCharacter.id
+            ? updatedCharacter
+            : character
+        );
+
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        return updated;
+      });
+    }}
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label>
+ 
+  <label>
+  🛡️ Armor:
+  <input
+    type="number"
+    value={selectedCharacter.stats.armor}
+    onChange={(event) =>
+      updateStat("armor", Number(event.target.value))
+    }
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label>
+
+<br />
+
+<label>
+  ⚔️ Damage:
+  <input
+    type="number"
+    value={selectedCharacter.stats.damage}
+    onChange={(event) =>
+      updateStat("damage", Number(event.target.value))
+    }
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label>
+<label>
+  💪 Strength:
+  <input
+    type="number"
+    value={selectedCharacter.stats.strength}
+    onChange={(event) =>
+      updateStat("strength", Number(event.target.value))
+    }
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label>
+
+<br />
+
+<label>
+  🏃 Dexterity:
+  <input
+    type="number"
+    value={selectedCharacter.stats.dexterity}
+    onChange={(event) =>
+      updateStat("dexterity", Number(event.target.value))
+    }
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label>
+
+<br />
+
+<label>
+  🫀 Constitution:
+  <input
+    type="number"
+    value={selectedCharacter.stats.constitution}
+    onChange={(event) =>
+      updateStat("constitution", Number(event.target.value))
+    }
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label> 
+<br />
+
+<label>
+  🧠 Intelligence:
+  <input
+    type="number"
+    value={selectedCharacter.stats.intelligence}
+    onChange={(event) =>
+      updateStat("intelligence", Number(event.target.value))
+    }
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label>
+<br />
+
+<label>
+  🦉 Wisdom:
+  <input
+    type="number"
+    value={selectedCharacter.stats.wisdom}
+    onChange={(event) =>
+      updateStat("wisdom", Number(event.target.value))
+    }
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label>
+<br />
+
+<label>
+  ✨ Charisma:
+  <input
+    type="number"
+    value={selectedCharacter.stats.charisma}
+    onChange={(event) =>
+      updateStat("charisma", Number(event.target.value))
+    }
+    style={{ marginLeft: "8px", width: "80px" }}
+  />
+</label>
+
+  </div>
+
+)}
+
+<div style={{ marginTop: "20px" }}>
+  <h3>Inventory & Equipment</h3>
+
+  <input
+    value={itemName}
+    onChange={(event) => setItemName(event.target.value)}
+    placeholder="Item name"
+  />
+
+  <input
+    type="number"
+    min="1"
+    value={itemQuantity}
+    onChange={(event) => setItemQuantity(Number(event.target.value))}
+    style={{ marginLeft: "8px", width: "70px" }}
+  />
+
+  <input
+    value={itemDescription}
+    onChange={(event) => setItemDescription(event.target.value)}
+    placeholder="Short description"
+    style={{ marginLeft: "8px" }}
+  />
+<button
+  className="btn"
+  onClick={() => {
+    if (!itemName.trim()) return;
+
+    const newItem = {
+      id: crypto.randomUUID(),
+      name: itemName.trim(),
+      quantity: Math.max(1, itemQuantity),
+      description: itemDescription.trim(),
+    };
+
+    const updatedCharacter = {
+      ...selectedCharacter,
+      inventory: [...(selectedCharacter.inventory ?? []), newItem],
+    };
+
+    setSelectedCharacter(updatedCharacter);
+
+    setCharacters((old) => {
+      const updated = old.map((character) =>
+        character.id === updatedCharacter.id
+          ? updatedCharacter
+          : character
+      );
+
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      return updated;
+    });
+
+    setItemName("");
+    setItemQuantity(1);
+    setItemDescription("");
+  }}
+  style={{ marginLeft: "8px" }}
+>
+  Add Item
+</button>
+{(selectedCharacter.inventory ?? []).map((item) => (
+  <div
+    key={item.id}
+    style={{
+      marginTop: "12px",
+      padding: "10px",
+      border: "1px solid var(--border)",
+      borderRadius: "8px",
+    }}
+  >
+    <strong>{item.name}</strong>
+
+    <span style={{ marginLeft: "8px" }}>
+      Qty: {item.quantity}
+    </span>
+
+    {item.description && (
+      <p style={{ marginBottom: 0 }}>
+        {item.description}
+      </p>
+    )}
+  </div>
+))}
+
+</div>
+
 <textarea
+
   value={selectedCharacter.description || ""}
   placeholder="Description"
   onChange={(event) => {
@@ -272,312 +686,7 @@ setCharacters((old) => {
   }}
 />
 
-<textarea
-  value={selectedCharacter.personality || ""}
-  placeholder="Personality"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      personality: event.target.value,
-    };
 
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/>
-
-<textarea
-  value={selectedCharacter.personality || ""}
-  placeholder="Personality"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      personality: event.target.value,
-    };
-
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/>
-<textarea
-  value={selectedCharacter.personality || ""}
-  placeholder="Personality"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      personality: event.target.value,
-    };
-
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/>
-
-<textarea
-  value={selectedCharacter.personality || ""}
-  placeholder="Personality"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      personality: event.target.value,
-    };
-
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/>
-
-<textarea
-  value={selectedCharacter.personality || ""}
-  placeholder="Personality"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      personality: event.target.value,
-    };
-
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/>
-<textarea
-  value={selectedCharacter.personality || ""}
-  placeholder="Personality"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      personality: event.target.value,
-    };
-
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/>
-
-<textarea
-  value={selectedCharacter.personality || ""}
-  placeholder="Personality"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      personality: event.target.value,
-    };
-
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/><textarea
-  value={selectedCharacter.personality || ""}
-  placeholder="Personality"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      personality: event.target.value,
-    };
-
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/>
-
-
-  <textarea
-  value={selectedCharacter.personality || ""}
-  placeholder="Personality"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      personality: event.target.value,
-    };
-
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/> 
-
-<textarea
-  value={selectedCharacter.description || ""}
-  placeholder="Description"
-  onChange={(event) => {
-    const updatedCharacter = {
-      ...selectedCharacter,
-      description: event.target.value,
-    };
-
-    setSelectedCharacter(updatedCharacter);
-
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
-
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  style={{
-    width: "100%",
-    minHeight: "100px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "8px",
-  }}
-/>
  <textarea
   value={selectedCharacter.notes || ""}
   placeholder="Notes"
@@ -615,6 +724,32 @@ setCharacters((old) => {
   style={{ marginTop: "12px" }}
 >
   Close Sheet
+</button>
+<button
+  className="btn"
+  onClick={() => {
+    if (!selectedCharacter) return;
+
+    const confirmed = window.confirm(
+      `Delete ${selectedCharacter.name}? This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setCharacters((old) => {
+      const updated = old.filter(
+        (character) => character.id !== selectedCharacter.id
+      );
+
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      return updated;
+    });
+
+    setSelectedCharacter(null);
+  }}
+  style={{ marginTop: "12px", marginLeft: "8px" }}
+>
+  Delete Character
 </button>
         </div>
       )}
