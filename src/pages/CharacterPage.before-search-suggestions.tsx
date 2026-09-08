@@ -635,93 +635,46 @@ const effectiveArmor =
           }}
         />
 
-        {itemTemplateSearch.trim() && (
-          <div
-            style={{
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              overflow: "hidden",
-              marginBottom: "8px",
-            }}
-          >
-            {itemTemplates
-              .filter((template) =>
-                `${template.name} ${template.category}`
-                  .toLowerCase()
-                  .includes(itemTemplateSearch.toLowerCase())
-              )
-              .map((template) => (
-                <button
-                  key={template.name}
-                  type="button"
-                  onClick={() => {
-                    setItemTemplateName(template.name);
-                    setItemTemplateSearch(template.name);
-                    setItemName(template.name);
-                    setItemCategory(template.category);
-                    setItemDescription(template.description);
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "10px",
-                    textAlign: "left",
-                    border: "none",
-                    borderBottom: "1px solid var(--border)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <strong>{template.name}</strong>
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: "0.85em",
-                      opacity: 0.75,
-                      marginTop: "2px",
-                    }}
-                  >
-                    {template.category}
-                    {template.armorRating !== undefined
-                      ? ` • Rating ${template.armorRating} • Durability ${Math.round(
-                          template.armorRating * 10
-                        )}`
-                      : ""}
-                    {template.damage
-                      ? ` • Damage ${template.damage}`
-                      : ""}
-                  </span>
-                </button>
-              ))}
+      <select
+        value={itemTemplateName}
+        onChange={(event) => {
+          const templateName = event.target.value;
+          setItemTemplateName(templateName);
 
-            {itemTemplates.filter((template) =>
+          if (templateName === "Create New Item") {
+            return;
+          }
+
+          const template = itemTemplates.find(
+            (entry) => entry.name === templateName
+          );
+
+          if (!template) return;
+
+          setItemName(template.name);
+          setItemCategory(template.category);
+          setItemDescription(template.description);
+        }}
+        style={{
+          width: "100%",
+          padding: "8px",
+          borderRadius: "8px",
+        }}
+      >
+        <option value="Create New Item">Create New Item</option>
+
+          {itemTemplates
+            .filter((template) =>
               `${template.name} ${template.category}`
                 .toLowerCase()
                 .includes(itemTemplateSearch.toLowerCase())
-            ).length === 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const newName = itemTemplateSearch.trim();
-
-                  setItemTemplateName("Create New Item");
-                  setItemName(newName);
-                  setItemCategory("Weapon");
-                  setItemDescription("");
-                }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "10px",
-                  textAlign: "left",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                + Create "{itemTemplateSearch.trim()}"
-              </button>
-            )}
-          </div>
-        )}
+            )
+            .map((template) => (
+          <option key={template.name} value={template.name}>
+            {template.name}
+          </option>
+        ))}
+      </select>
     </label>
 
   <input

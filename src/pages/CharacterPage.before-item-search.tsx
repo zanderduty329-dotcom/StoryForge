@@ -120,8 +120,7 @@ const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(nul
 const [itemName, setItemName] = useState("");
 const [itemQuantity, setItemQuantity] = useState(1);
 const [itemDescription, setItemDescription] = useState("");
-const [itemTemplateName, setItemTemplateName] = useState("Create New Item");
-const [itemTemplateSearch, setItemTemplateSearch] = useState("");
+const [itemTemplateName, setItemTemplateName] = useState("Custom Item");
 const [showStats, setShowStats] = useState(true);
 const [showInventory, setShowInventory] = useState(true);
 const [showDescription, setShowDescription] = useState(true);
@@ -620,108 +619,43 @@ const effectiveArmor =
 
     <label style={{ display: "block", marginBottom: "8px" }}>
       <span style={{ display: "block", marginBottom: "4px" }}>
-          Search Compendium Items
+        Item Template
       </span>
 
-        <input
-          value={itemTemplateSearch}
-          onChange={(event) => setItemTemplateSearch(event.target.value)}
-          placeholder="Search items..."
-          style={{
-            width: "100%",
-            padding: "8px",
-            marginBottom: "8px",
-            borderRadius: "8px",
-          }}
-        />
+      <select
+        value={itemTemplateName}
+        onChange={(event) => {
+          const templateName = event.target.value;
+          setItemTemplateName(templateName);
 
-        {itemTemplateSearch.trim() && (
-          <div
-            style={{
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              overflow: "hidden",
-              marginBottom: "8px",
-            }}
-          >
-            {itemTemplates
-              .filter((template) =>
-                `${template.name} ${template.category}`
-                  .toLowerCase()
-                  .includes(itemTemplateSearch.toLowerCase())
-              )
-              .map((template) => (
-                <button
-                  key={template.name}
-                  type="button"
-                  onClick={() => {
-                    setItemTemplateName(template.name);
-                    setItemTemplateSearch(template.name);
-                    setItemName(template.name);
-                    setItemCategory(template.category);
-                    setItemDescription(template.description);
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "10px",
-                    textAlign: "left",
-                    border: "none",
-                    borderBottom: "1px solid var(--border)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <strong>{template.name}</strong>
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: "0.85em",
-                      opacity: 0.75,
-                      marginTop: "2px",
-                    }}
-                  >
-                    {template.category}
-                    {template.armorRating !== undefined
-                      ? ` • Rating ${template.armorRating} • Durability ${Math.round(
-                          template.armorRating * 10
-                        )}`
-                      : ""}
-                    {template.damage
-                      ? ` • Damage ${template.damage}`
-                      : ""}
-                  </span>
-                </button>
-              ))}
+          if (templateName === "Custom Item") {
+            return;
+          }
 
-            {itemTemplates.filter((template) =>
-              `${template.name} ${template.category}`
-                .toLowerCase()
-                .includes(itemTemplateSearch.toLowerCase())
-            ).length === 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const newName = itemTemplateSearch.trim();
+          const template = itemTemplates.find(
+            (entry) => entry.name === templateName
+          );
 
-                  setItemTemplateName("Create New Item");
-                  setItemName(newName);
-                  setItemCategory("Weapon");
-                  setItemDescription("");
-                }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "10px",
-                  textAlign: "left",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                + Create "{itemTemplateSearch.trim()}"
-              </button>
-            )}
-          </div>
-        )}
+          if (!template) return;
+
+          setItemName(template.name);
+          setItemCategory(template.category);
+          setItemDescription(template.description);
+        }}
+        style={{
+          width: "100%",
+          padding: "8px",
+          borderRadius: "8px",
+        }}
+      >
+        <option value="Custom Item">Custom Item</option>
+
+        {itemTemplates.map((template) => (
+          <option key={template.name} value={template.name}>
+            {template.name}
+          </option>
+        ))}
+      </select>
     </label>
 
   <input
@@ -835,8 +769,7 @@ const effectiveArmor =
     setItemQuantity(1);
     setItemDescription("");
     setItemCategory("Weapon");
-      setItemTemplateName("Create New Item");
-      setItemTemplateSearch("");
+      setItemTemplateName("Custom Item");
   }}
   style={{ marginLeft: "8px" }}
 >

@@ -66,48 +66,6 @@ const roles = [
   "Custom",
 ];
 
-
-type ItemTemplate = {
-  name: string;
-  category: string;
-  description: string;
-  armorRating?: number;
-  damage?: string;
-};
-
-const itemTemplates: ItemTemplate[] = [
-  {
-    name: "Leather Armor",
-    category: "Armor",
-    armorRating: 1,
-    description: "Light leather protection.",
-  },
-  {
-    name: "Studded Leather Armor",
-    category: "Armor",
-    armorRating: 1.5,
-    description: "Leather armor reinforced with protective studs.",
-  },
-  {
-    name: "Wooden Shield",
-    category: "Shield",
-    armorRating: 1,
-    description: "A basic wooden shield.",
-  },
-  {
-    name: "Dagger",
-    category: "Weapon",
-    damage: "1d4",
-    description: "A small, quick melee weapon.",
-  },
-  {
-    name: "Shortsword",
-    category: "Weapon",
-    damage: "1d6",
-    description: "A light one-handed sword.",
-  },
-];
-
 function randomItem(items: string[]) {
   return items[Math.floor(Math.random() * items.length)];
 }
@@ -120,8 +78,6 @@ const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(nul
 const [itemName, setItemName] = useState("");
 const [itemQuantity, setItemQuantity] = useState(1);
 const [itemDescription, setItemDescription] = useState("");
-const [itemTemplateName, setItemTemplateName] = useState("Create New Item");
-const [itemTemplateSearch, setItemTemplateSearch] = useState("");
 const [showStats, setShowStats] = useState(true);
 const [showInventory, setShowInventory] = useState(true);
 const [showDescription, setShowDescription] = useState(true);
@@ -617,113 +573,6 @@ const effectiveArmor =
 {showInventory && (
   <div style={{ marginTop: "12px" }}>
 
-
-    <label style={{ display: "block", marginBottom: "8px" }}>
-      <span style={{ display: "block", marginBottom: "4px" }}>
-          Search Compendium Items
-      </span>
-
-        <input
-          value={itemTemplateSearch}
-          onChange={(event) => setItemTemplateSearch(event.target.value)}
-          placeholder="Search items..."
-          style={{
-            width: "100%",
-            padding: "8px",
-            marginBottom: "8px",
-            borderRadius: "8px",
-          }}
-        />
-
-        {itemTemplateSearch.trim() && (
-          <div
-            style={{
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              overflow: "hidden",
-              marginBottom: "8px",
-            }}
-          >
-            {itemTemplates
-              .filter((template) =>
-                `${template.name} ${template.category}`
-                  .toLowerCase()
-                  .includes(itemTemplateSearch.toLowerCase())
-              )
-              .map((template) => (
-                <button
-                  key={template.name}
-                  type="button"
-                  onClick={() => {
-                    setItemTemplateName(template.name);
-                    setItemTemplateSearch(template.name);
-                    setItemName(template.name);
-                    setItemCategory(template.category);
-                    setItemDescription(template.description);
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "10px",
-                    textAlign: "left",
-                    border: "none",
-                    borderBottom: "1px solid var(--border)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <strong>{template.name}</strong>
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: "0.85em",
-                      opacity: 0.75,
-                      marginTop: "2px",
-                    }}
-                  >
-                    {template.category}
-                    {template.armorRating !== undefined
-                      ? ` • Rating ${template.armorRating} • Durability ${Math.round(
-                          template.armorRating * 10
-                        )}`
-                      : ""}
-                    {template.damage
-                      ? ` • Damage ${template.damage}`
-                      : ""}
-                  </span>
-                </button>
-              ))}
-
-            {itemTemplates.filter((template) =>
-              `${template.name} ${template.category}`
-                .toLowerCase()
-                .includes(itemTemplateSearch.toLowerCase())
-            ).length === 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const newName = itemTemplateSearch.trim();
-
-                  setItemTemplateName("Create New Item");
-                  setItemName(newName);
-                  setItemCategory("Weapon");
-                  setItemDescription("");
-                }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "10px",
-                  textAlign: "left",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                + Create "{itemTemplateSearch.trim()}"
-              </button>
-            )}
-          </div>
-        )}
-    </label>
-
   <input
     value={itemName}
     onChange={(event) => setItemName(event.target.value)}
@@ -767,51 +616,25 @@ const effectiveArmor =
 <button
   className="btn"
   onClick={() => {
-      const selectedItemTemplate = itemTemplates.find(
-        (template) => template.name === itemTemplateName
-      );
+    if (!itemName.trim()) return;
 
-      const newItemName =
-        selectedItemTemplate?.name || itemName.trim();
+    const newItemCategory = itemCategory.trim() || "Other";
 
-      if (!newItemName) return;
+    const newItem = {
+      id: crypto.randomUUID(),
+      name: itemName.trim(),
+      category: newItemCategory,
+      quantity: Math.max(1, itemQuantity),
+      description: itemDescription.trim(),
 
-      const newItemCategory =
-        selectedItemTemplate?.category ||
-        itemCategory.trim() ||
-        "Other";
-
-      const newItemDescription =
-        selectedItemTemplate?.description ||
-        itemDescription.trim();
-
-      const startingArmorRating =
-        selectedItemTemplate?.armorRating ?? 0;
-
-      const startingMaxDurability =
-        Math.round(startingArmorRating * 10);
-
-      const newItem = {
-        id: crypto.randomUUID(),
-        name: newItemName,
-        category: newItemCategory,
-        quantity: Math.max(1, itemQuantity),
-        description: newItemDescription,
-
-        ...(newItemCategory === "Armor" || newItemCategory === "Shield"
-          ? {
-              armorBonus: startingArmorRating,
-              maxDurability: startingMaxDurability,
-              durability: startingMaxDurability,
-            }
-          : {}),
-
-        ...(newItemCategory === "Weapon"
-          ? {
-              damage: selectedItemTemplate?.damage ?? "",
-            }
-          : {}),
-      };
+      ...(newItemCategory === "Armor" || newItemCategory === "Shield"
+        ? {
+            armorBonus: 0,
+            maxDurability: 0,
+            durability: 0,
+          }
+        : {}),
+    };
 
     const updatedCharacter = {
       ...selectedCharacter,
@@ -835,8 +658,6 @@ const effectiveArmor =
     setItemQuantity(1);
     setItemDescription("");
     setItemCategory("Weapon");
-      setItemTemplateName("Create New Item");
-      setItemTemplateSearch("");
   }}
   style={{ marginLeft: "8px" }}
 >
