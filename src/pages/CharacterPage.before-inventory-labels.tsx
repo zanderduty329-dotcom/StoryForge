@@ -664,10 +664,6 @@ const effectiveArmor =
       borderRadius: "8px",
     }}
   >
-      <label style={{ display: "block" }}>
-        <span style={{ display: "block", marginBottom: "4px" }}>
-          Item Name
-        </span>
     <input
       value={item.name}
       onChange={(event) => {
@@ -697,12 +693,6 @@ const effectiveArmor =
         });
       }}
     />
-      </label>
-
-      <label style={{ display: "block", marginTop: "8px" }}>
-        <span style={{ display: "block", marginBottom: "4px" }}>
-          Item Type
-        </span>
       <input
         list="item-category-options"
         value={item.category ?? "Other"}
@@ -741,12 +731,6 @@ const effectiveArmor =
           borderRadius: "8px",
         }}
       />
-      </label>
-
-      <label style={{ display: "block", marginTop: "8px" }}>
-        <span style={{ display: "block", marginBottom: "4px" }}>
-          Quantity
-        </span>
 <input
   type="number"
   min="1"
@@ -782,7 +766,6 @@ const effectiveArmor =
   }}
   style={{ marginLeft: "8px", width: "70px" }}
 />
-      </label>
   {item.category === "Weapon" && (
     <label style={{ display: "block", marginTop: "8px" }}>
       <span style={{ display: "block", marginBottom: "4px" }}>
@@ -847,13 +830,7 @@ const effectiveArmor =
         min="0"
         step="0.5"
         value={item.armorBonus ?? ""}
-        onWheel={(event) => event.currentTarget.blur()}
-onKeyDown={(event) => {
-  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-    event.preventDefault();
-  }
-}}
-onChange={(event) => {
+        onChange={(event) => {
           const newRating = Math.max(0, Number(event.target.value));
           const newMaxDurability = Math.round(newRating * 10);
 
