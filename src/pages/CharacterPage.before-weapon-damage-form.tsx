@@ -121,7 +121,6 @@ const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(nul
 const [itemName, setItemName] = useState("");
 const [itemQuantity, setItemQuantity] = useState(1);
 const [itemDescription, setItemDescription] = useState("");
-const [itemDamage, setItemDamage] = useState("");
 const [itemTemplateName, setItemTemplateName] = useState("Create New Item");
 const [itemTemplateSearch, setItemTemplateSearch] = useState("");
 const [customItemTemplates, setCustomItemTemplates] = useState<ItemTemplate[]>([]);
@@ -683,7 +682,6 @@ const effectiveArmor =
                     setItemName(template.name);
                     setItemCategory(template.category);
                     setItemDescription(template.description);
-                    setItemDamage(template.damage ?? "");
                   }}
                   style={{
                     display: "block",
@@ -731,7 +729,6 @@ const effectiveArmor =
                   setItemName(newName);
                   setItemCategory("Weapon");
                   setItemDescription("");
-                  setItemDamage("");
                 }}
                 style={{
                   display: "block",
@@ -775,25 +772,6 @@ const effectiveArmor =
   <option value="Other" />
 </datalist>
 
-  {itemCategory === "Weapon" && (
-    <label style={{ display: "block", marginTop: "8px" }}>
-      <span style={{ display: "block", marginBottom: "4px" }}>
-        New Weapon Damage
-      </span>
-      <input
-        value={itemDamage}
-        onChange={(event) => setItemDamage(event.target.value)}
-        placeholder="Example: 1d6"
-        style={{
-          width: "100%",
-          padding: "8px",
-          borderRadius: "8px",
-        }}
-      />
-    </label>
-  )}
-
-
   <input
     type="number"
     min="1"
@@ -811,18 +789,14 @@ const effectiveArmor =
 <button
   className="btn"
   onClick={() => {
-        const typedItemName = itemName.trim();
+      const selectedItemTemplate = allItemTemplates.find(
+        (template) => template.name === itemTemplateName
+      );
 
-        const selectedItemTemplate = allItemTemplates.find(
-          (template) =>
-            template.name === itemTemplateName &&
-            template.name.toLowerCase() === typedItemName.toLowerCase()
-        );
+      const newItemName =
+        selectedItemTemplate?.name || itemName.trim();
 
-        const newItemName =
-          typedItemName || selectedItemTemplate?.name || "";
-
-        if (!newItemName) return;
+      if (!newItemName) return;
 
       const newItemCategory =
         selectedItemTemplate?.category ||
@@ -838,9 +812,6 @@ const effectiveArmor =
 
       const startingMaxDurability =
         Math.round(startingArmorRating * 10);
-
-        const startingWeaponDamage =
-          itemDamage.trim() || selectedItemTemplate?.damage || "";
 
       const newItem = {
         id: crypto.randomUUID(),
@@ -859,7 +830,7 @@ const effectiveArmor =
 
         ...(newItemCategory === "Weapon"
           ? {
-                damage: startingWeaponDamage,
+              damage: selectedItemTemplate?.damage ?? "",
             }
           : {}),
       };
@@ -882,33 +853,27 @@ const effectiveArmor =
       return updated;
     });
 
-        const alreadyInCompendium = allItemTemplates.some(
-          (template) =>
-            template.name.toLowerCase() === newItemName.toLowerCase()
-        );
+      if (!selectedItemTemplate) {
+        setPendingCompendiumItem({
+          name: newItemName,
+          category: newItemCategory,
+          description: newItemDescription,
 
-        if (!alreadyInCompendium) {
-          setPendingCompendiumItem({
-            name: newItemName,
-            category: newItemCategory,
-            description: newItemDescription,
+          ...(newItemCategory === "Armor" || newItemCategory === "Shield"
+            ? { armorRating: startingArmorRating }
+            : {}),
 
-            ...(newItemCategory === "Armor" || newItemCategory === "Shield"
-              ? { armorRating: startingArmorRating }
-              : {}),
-
-            ...(newItemCategory === "Weapon"
-              ? { damage: startingWeaponDamage }
-              : {}),
-          });
-        } else {
-          setPendingCompendiumItem(null);
-        }
+          ...(newItemCategory === "Weapon"
+            ? { damage: "" }
+            : {}),
+        });
+      } else {
+        setPendingCompendiumItem(null);
+      }
 
     setItemName("");
     setItemQuantity(1);
     setItemDescription("");
-      setItemDamage("");
     setItemCategory("Weapon");
       setItemTemplateName("Create New Item");
       setItemTemplateSearch("");

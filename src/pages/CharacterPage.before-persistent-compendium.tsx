@@ -115,42 +115,19 @@ export function CharacterPage({ worldId }: { worldId: string }) {
   const [characters, setCharacters] = useState<Character[]>([]);
 const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const storageKey = `storyforge-characters-${worldId}`;
-  const compendiumStorageKey = `storyforge-item-compendium-${worldId}`;
   const [name, setName] = useState("");
 
 const [itemName, setItemName] = useState("");
 const [itemQuantity, setItemQuantity] = useState(1);
 const [itemDescription, setItemDescription] = useState("");
-const [itemDamage, setItemDamage] = useState("");
 const [itemTemplateName, setItemTemplateName] = useState("Create New Item");
 const [itemTemplateSearch, setItemTemplateSearch] = useState("");
-const [customItemTemplates, setCustomItemTemplates] = useState<ItemTemplate[]>([]);
-const [pendingCompendiumItem, setPendingCompendiumItem] = useState<ItemTemplate | null>(null);
 const [showStats, setShowStats] = useState(true);
 const [showInventory, setShowInventory] = useState(true);
 const [showDescription, setShowDescription] = useState(true);
 const [showPersonality, setShowPersonality] = useState(true);
 const [showNotes, setShowNotes] = useState(true);
 const [itemCategory, setItemCategory] = useState("Weapon");
-
-  const allItemTemplates = [
-    ...itemTemplates,
-    ...customItemTemplates,
-  ];
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(compendiumStorageKey);
-      const parsed = saved ? JSON.parse(saved) : [];
-
-      setCustomItemTemplates(
-        Array.isArray(parsed) ? parsed : []
-      );
-    } catch {
-      setCustomItemTemplates([]);
-    }
-  }, [compendiumStorageKey]);
-
   useEffect(() => {
   try {
 const saved = localStorage.getItem(storageKey);
@@ -667,7 +644,7 @@ const effectiveArmor =
               marginBottom: "8px",
             }}
           >
-            {allItemTemplates
+            {itemTemplates
               .filter((template) =>
                 `${template.name} ${template.category}`
                   .toLowerCase()
@@ -683,7 +660,6 @@ const effectiveArmor =
                     setItemName(template.name);
                     setItemCategory(template.category);
                     setItemDescription(template.description);
-                    setItemDamage(template.damage ?? "");
                   }}
                   style={{
                     display: "block",
@@ -717,7 +693,7 @@ const effectiveArmor =
                 </button>
               ))}
 
-            {allItemTemplates.filter((template) =>
+            {itemTemplates.filter((template) =>
               `${template.name} ${template.category}`
                 .toLowerCase()
                 .includes(itemTemplateSearch.toLowerCase())
@@ -731,7 +707,6 @@ const effectiveArmor =
                   setItemName(newName);
                   setItemCategory("Weapon");
                   setItemDescription("");
-                  setItemDamage("");
                 }}
                 style={{
                   display: "block",
@@ -775,25 +750,6 @@ const effectiveArmor =
   <option value="Other" />
 </datalist>
 
-  {itemCategory === "Weapon" && (
-    <label style={{ display: "block", marginTop: "8px" }}>
-      <span style={{ display: "block", marginBottom: "4px" }}>
-        New Weapon Damage
-      </span>
-      <input
-        value={itemDamage}
-        onChange={(event) => setItemDamage(event.target.value)}
-        placeholder="Example: 1d6"
-        style={{
-          width: "100%",
-          padding: "8px",
-          borderRadius: "8px",
-        }}
-      />
-    </label>
-  )}
-
-
   <input
     type="number"
     min="1"
@@ -811,18 +767,14 @@ const effectiveArmor =
 <button
   className="btn"
   onClick={() => {
-        const typedItemName = itemName.trim();
+      const selectedItemTemplate = itemTemplates.find(
+        (template) => template.name === itemTemplateName
+      );
 
-        const selectedItemTemplate = allItemTemplates.find(
-          (template) =>
-            template.name === itemTemplateName &&
-            template.name.toLowerCase() === typedItemName.toLowerCase()
-        );
+      const newItemName =
+        selectedItemTemplate?.name || itemName.trim();
 
-        const newItemName =
-          typedItemName || selectedItemTemplate?.name || "";
-
-        if (!newItemName) return;
+      if (!newItemName) return;
 
       const newItemCategory =
         selectedItemTemplate?.category ||
@@ -838,9 +790,6 @@ const effectiveArmor =
 
       const startingMaxDurability =
         Math.round(startingArmorRating * 10);
-
-        const startingWeaponDamage =
-          itemDamage.trim() || selectedItemTemplate?.damage || "";
 
       const newItem = {
         id: crypto.randomUUID(),
@@ -859,7 +808,7 @@ const effectiveArmor =
 
         ...(newItemCategory === "Weapon"
           ? {
-                damage: startingWeaponDamage,
+              damage: selectedItemTemplate?.damage ?? "",
             }
           : {}),
       };
@@ -882,33 +831,9 @@ const effectiveArmor =
       return updated;
     });
 
-        const alreadyInCompendium = allItemTemplates.some(
-          (template) =>
-            template.name.toLowerCase() === newItemName.toLowerCase()
-        );
-
-        if (!alreadyInCompendium) {
-          setPendingCompendiumItem({
-            name: newItemName,
-            category: newItemCategory,
-            description: newItemDescription,
-
-            ...(newItemCategory === "Armor" || newItemCategory === "Shield"
-              ? { armorRating: startingArmorRating }
-              : {}),
-
-            ...(newItemCategory === "Weapon"
-              ? { damage: startingWeaponDamage }
-              : {}),
-          });
-        } else {
-          setPendingCompendiumItem(null);
-        }
-
     setItemName("");
     setItemQuantity(1);
     setItemDescription("");
-      setItemDamage("");
     setItemCategory("Weapon");
       setItemTemplateName("Create New Item");
       setItemTemplateSearch("");
@@ -917,67 +842,6 @@ const effectiveArmor =
 >
   Add Item
 </button>
-
-  {pendingCompendiumItem && (
-    <div
-      style={{
-        marginTop: "12px",
-        padding: "12px",
-        border: "1px solid var(--border)",
-        borderRadius: "8px",
-      }}
-    >
-      <strong>
-        Save "{pendingCompendiumItem.name}" to the Compendium?
-      </strong>
-
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          marginTop: "10px",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            const alreadyExists = allItemTemplates.some(
-              (template) =>
-                template.name.toLowerCase() ===
-                pendingCompendiumItem.name.toLowerCase()
-            );
-
-            if (!alreadyExists) {
-              const updatedCompendium = [
-                ...customItemTemplates,
-                pendingCompendiumItem,
-              ];
-
-              setCustomItemTemplates(updatedCompendium);
-              localStorage.setItem(
-                compendiumStorageKey,
-                JSON.stringify(updatedCompendium)
-              );
-            }
-
-            setPendingCompendiumItem(null);
-          }}
-        >
-          Save to Compendium
-        </button>
-
-        <button
-          type="button"
-          className="btn"
-          onClick={() => setPendingCompendiumItem(null)}
-        >
-          Character Only
-        </button>
-      </div>
-    </div>
-  )}
 
 {(selectedCharacter.inventory ?? []).map((item) => (
   <div
