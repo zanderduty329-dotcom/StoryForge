@@ -985,17 +985,6 @@ onChange={(event) => {
   />
 )}
 
-  <label
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "6px",
-      marginTop: "12px",
-    }}
-  >
-    <span style={{ display: "block", marginBottom: "4px" }}>
-      Description
-    </span>
 <textarea
   value={item.description || ""}
   onChange={(event) => {
@@ -1038,7 +1027,6 @@ onChange={(event) => {
     resize: "vertical",
   }}
 />
-  </label>
 
 <label style={{ display: "block", marginTop: "8px" }}>
   <input
@@ -1074,7 +1062,7 @@ onChange={(event) => {
       });
     }}
   />
-  <span>Equipped</span>
+  <span style={{ marginLeft: "6px" }}>Equipped</span>
 </label>
 <button
   className="btn"
