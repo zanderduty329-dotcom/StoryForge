@@ -618,22 +618,12 @@ const effectiveArmor =
   onClick={() => {
     if (!itemName.trim()) return;
 
-    const newItemCategory = itemCategory.trim() || "Other";
-
     const newItem = {
       id: crypto.randomUUID(),
       name: itemName.trim(),
-      category: newItemCategory,
+      category: itemCategory.trim() || "Other",
       quantity: Math.max(1, itemQuantity),
       description: itemDescription.trim(),
-
-      ...(newItemCategory === "Armor" || newItemCategory === "Shield"
-        ? {
-            armorBonus: 0,
-            maxDurability: 0,
-            durability: 0,
-          }
-        : {}),
     };
 
     const updatedCharacter = {
