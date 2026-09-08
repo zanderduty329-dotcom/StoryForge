@@ -16,6 +16,13 @@ inventory?: {
   name: string;
   quantity: number;
   description?: string;
+  equipped?: boolean;
+  category?: string;
+  damage?: string;
+  armorBonus?: number;
+    durability?: number;
+    maxDurability?: number;
+  uses?: number;
 }[];
 
 stats?: {
@@ -76,6 +83,7 @@ const [showInventory, setShowInventory] = useState(true);
 const [showDescription, setShowDescription] = useState(true);
 const [showPersonality, setShowPersonality] = useState(true);
 const [showNotes, setShowNotes] = useState(true);
+const [itemCategory, setItemCategory] = useState("Weapon");
   useEffect(() => {
   try {
 const saved = localStorage.getItem(storageKey);
@@ -168,6 +176,12 @@ const updateStat = (
     return updated;
   });
 };
+const effectiveArmor =
+  (selectedCharacter?.stats?.armor ?? 0) +
+  (selectedCharacter?.inventory ?? [])
+    .filter((item) => item.equipped)
+    .reduce((total, item) => total + (item.armorBonus ?? 0), 0);
+
   return (
     <div>
       <h2>🎭 Character Archive</h2>
@@ -564,6 +578,26 @@ const updateStat = (
     onChange={(event) => setItemName(event.target.value)}
     placeholder="Item name"
   />
+<input
+  list="item-category-options"
+  value={itemCategory}
+  onChange={(event) => setItemCategory(event.target.value)}
+  placeholder="Item Type"
+  style={{
+    padding: "8px",
+    marginTop: "8px",
+    marginRight: "8px",
+    borderRadius: "8px",
+  }}
+/>
+<datalist id="item-category-options">
+  <option value="Weapon" />
+  <option value="Armor" />
+  <option value="Shield" />
+  <option value="Consumable" />
+  <option value="Tool" />
+  <option value="Other" />
+</datalist>
 
   <input
     type="number"
@@ -587,6 +621,7 @@ const updateStat = (
     const newItem = {
       id: crypto.randomUUID(),
       name: itemName.trim(),
+      category: itemCategory.trim() || "Other",
       quantity: Math.max(1, itemQuantity),
       description: itemDescription.trim(),
     };
@@ -612,6 +647,7 @@ const updateStat = (
     setItemName("");
     setItemQuantity(1);
     setItemDescription("");
+    setItemCategory("Weapon");
   }}
   style={{ marginLeft: "8px" }}
 >
@@ -657,6 +693,44 @@ const updateStat = (
         });
       }}
     />
+      <input
+        list="item-category-options"
+        value={item.category ?? "Other"}
+        onChange={(event) => {
+          const updatedInventory = (selectedCharacter.inventory ?? []).map(
+            (inventoryItem) =>
+              inventoryItem.id === item.id
+                ? { ...inventoryItem, category: event.target.value }
+                : inventoryItem
+          );
+
+          const updatedCharacter = {
+            ...selectedCharacter,
+            inventory: updatedInventory,
+          };
+
+          setSelectedCharacter(updatedCharacter);
+
+          setCharacters((old) => {
+            const updated = old.map((character) =>
+              character.id === updatedCharacter.id
+                ? updatedCharacter
+                : character
+            );
+
+            localStorage.setItem(storageKey, JSON.stringify(updated));
+            return updated;
+          });
+        }}
+        placeholder="Item Type"
+        style={{
+          display: "block",
+          width: "100%",
+          marginTop: "8px",
+          padding: "8px",
+          borderRadius: "8px",
+        }}
+      />
 <input
   type="number"
   min="1"
@@ -692,6 +766,201 @@ const updateStat = (
   }}
   style={{ marginLeft: "8px", width: "70px" }}
 />
+  {item.category === "Weapon" && (
+    <label style={{ display: "block", marginTop: "8px" }}>
+      <span style={{ display: "block", marginBottom: "4px" }}>
+        Weapon Damage
+      </span>
+
+      <input
+        value={item.damage ?? ""}
+        onChange={(event) => {
+          const updatedInventory = (selectedCharacter.inventory ?? []).map(
+            (inventoryItem) =>
+              inventoryItem.id === item.id
+                ? { ...inventoryItem, damage: event.target.value }
+                : inventoryItem
+          );
+
+          const updatedCharacter = {
+            ...selectedCharacter,
+            inventory: updatedInventory,
+          };
+
+          setSelectedCharacter(updatedCharacter);
+
+          setCharacters((old) => {
+            const updated = old.map((character) =>
+              character.id === updatedCharacter.id
+                ? updatedCharacter
+                : character
+            );
+
+            localStorage.setItem(storageKey, JSON.stringify(updated));
+            return updated;
+          });
+        }}
+        placeholder="Example: 1d4"
+        style={{
+          display: "block",
+          width: "100%",
+          padding: "8px",
+          borderRadius: "8px",
+        }}
+      />
+    </label>
+  )}
+
+  {(item.category === "Armor" || item.category === "Shield") && (
+  <div
+    style={{
+      marginTop: "8px",
+      padding: "10px",
+      border: "1px solid var(--border)",
+      borderRadius: "8px",
+    }}
+  >
+    <label style={{ display: "block" }}>
+      <span style={{ display: "block", marginBottom: "4px" }}>
+        Armor Rating
+      </span>
+
+      <input
+        type="number"
+        min="0"
+        step="0.5"
+        value={item.armorBonus ?? ""}
+        onChange={(event) => {
+          const newRating = Math.max(0, Number(event.target.value));
+          const newMaxDurability = Math.round(newRating * 10);
+
+          const updatedInventory = (selectedCharacter.inventory ?? []).map(
+            (inventoryItem) => {
+              if (inventoryItem.id !== item.id) {
+                return inventoryItem;
+              }
+
+              const oldRating = inventoryItem.armorBonus ?? 0;
+
+              const oldMaxDurability =
+                inventoryItem.maxDurability ??
+                Math.round(oldRating * 10);
+
+              const oldCurrentDurability =
+                inventoryItem.durability ??
+                oldMaxDurability;
+
+              const newCurrentDurability =
+                oldCurrentDurability >= oldMaxDurability
+                  ? newMaxDurability
+                  : Math.min(oldCurrentDurability, newMaxDurability);
+
+              return {
+                ...inventoryItem,
+                armorBonus: newRating,
+                maxDurability: newMaxDurability,
+                durability: newCurrentDurability,
+              };
+            }
+          );
+
+          const updatedCharacter = {
+            ...selectedCharacter,
+            inventory: updatedInventory,
+          };
+
+          setSelectedCharacter(updatedCharacter);
+
+          setCharacters((old) => {
+            const updated = old.map((character) =>
+              character.id === updatedCharacter.id
+                ? updatedCharacter
+                : character
+            );
+
+            localStorage.setItem(storageKey, JSON.stringify(updated));
+            return updated;
+          });
+        }}
+        placeholder="Example: 2"
+        style={{
+          display: "block",
+          width: "100%",
+          padding: "8px",
+          borderRadius: "8px",
+        }}
+      />
+    </label>
+
+    <label style={{ display: "block", marginTop: "8px" }}>
+      <span style={{ display: "block", marginBottom: "4px" }}>
+        Max Durability
+      </span>
+
+      <input
+        type="number"
+        value={Math.round((item.armorBonus ?? 0) * 10)}
+        readOnly
+        style={{
+          display: "block",
+          width: "100%",
+          padding: "8px",
+          borderRadius: "8px",
+          opacity: 0.8,
+        }}
+      />
+
+      <small style={{ display: "block", marginTop: "4px" }}>
+        Automatically calculated from Armor Rating
+      </small>
+    </label>
+  </div>
+)}
+
+{item.category === "Consumable" && (
+  <input
+    type="number"
+    min="0"
+    value={item.uses ?? 1}
+    onChange={(event) => {
+      const updatedInventory = (selectedCharacter.inventory ?? []).map(
+        (inventoryItem) =>
+          inventoryItem.id === item.id
+            ? {
+                ...inventoryItem,
+                uses: Math.max(0, Number(event.target.value)),
+              }
+            : inventoryItem
+      );
+
+      const updatedCharacter = {
+        ...selectedCharacter,
+        inventory: updatedInventory,
+      };
+
+      setSelectedCharacter(updatedCharacter);
+
+      setCharacters((old) => {
+        const updated = old.map((character) =>
+          character.id === updatedCharacter.id
+            ? updatedCharacter
+            : character
+        );
+
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        return updated;
+      });
+    }}
+    placeholder="Uses / Charges"
+    style={{
+      display: "block",
+      width: "100%",
+      marginTop: "8px",
+      padding: "8px",
+      borderRadius: "8px",
+    }}
+  />
+)}
 
 <textarea
   value={item.description || ""}
@@ -736,6 +1005,42 @@ const updateStat = (
   }}
 />
 
+<label style={{ display: "block", marginTop: "8px" }}>
+  <input
+    type="checkbox"
+    checked={item.equipped ?? false}
+    onChange={(event) => {
+      const updatedInventory = (selectedCharacter.inventory ?? []).map(
+        (inventoryItem) =>
+          inventoryItem.id === item.id
+            ? {
+                ...inventoryItem,
+                equipped: event.target.checked,
+              }
+            : inventoryItem
+      );
+
+      const updatedCharacter = {
+        ...selectedCharacter,
+        inventory: updatedInventory,
+      };
+
+      setSelectedCharacter(updatedCharacter);
+
+      setCharacters((old) => {
+        const updated = old.map((character) =>
+          character.id === updatedCharacter.id
+            ? updatedCharacter
+            : character
+        );
+
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        return updated;
+      });
+    }}
+  />
+  <span style={{ marginLeft: "6px" }}>Equipped</span>
+</label>
 <button
   className="btn"
   onClick={() => {
@@ -759,7 +1064,10 @@ const updateStat = (
       return updated;
     });
   }}
-  style={{ marginLeft: "8px" }}
+  style={{
+    display: "block",
+    marginTop: "14px",
+  }}
 >
   Remove Item
 </button>
@@ -808,7 +1116,7 @@ const updateStat = (
     minHeight: "100px",
     marginTop: "12px",
     padding: "10px",
-    borderRadius: "8px",
+borderRadius: "8px",
   }}
 />
   </div>

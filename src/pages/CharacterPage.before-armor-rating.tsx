@@ -20,6 +20,8 @@ inventory?: {
   category?: string;
   damage?: string;
   armorBonus?: number;
+    durability?: number;
+    maxDurability?: number;
   uses?: number;
 }[];
 
@@ -764,87 +766,224 @@ const effectiveArmor =
   }}
   style={{ marginLeft: "8px", width: "70px" }}
 />
-<input
-  value={item.damage ?? ""}
-  onChange={(event) => {
-    const updatedInventory = (selectedCharacter.inventory ?? []).map(
-      (inventoryItem) =>
-        inventoryItem.id === item.id
-          ? { ...inventoryItem, damage: event.target.value }
-          : inventoryItem
-    );
+  {item.category === "Weapon" && (
+    <label style={{ display: "block", marginTop: "8px" }}>
+      <span style={{ display: "block", marginBottom: "4px" }}>
+        Weapon Damage
+      </span>
 
-    const updatedCharacter = {
-      ...selectedCharacter,
-      inventory: updatedInventory,
-    };
+      <input
+        value={item.damage ?? ""}
+        onChange={(event) => {
+          const updatedInventory = (selectedCharacter.inventory ?? []).map(
+            (inventoryItem) =>
+              inventoryItem.id === item.id
+                ? { ...inventoryItem, damage: event.target.value }
+                : inventoryItem
+          );
 
-    setSelectedCharacter(updatedCharacter);
+          const updatedCharacter = {
+            ...selectedCharacter,
+            inventory: updatedInventory,
+          };
 
-    setCharacters((old) => {
-      const updated = old.map((character) =>
-        character.id === updatedCharacter.id
-          ? updatedCharacter
-          : character
-      );
+          setSelectedCharacter(updatedCharacter);
 
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      return updated;
-    });
-  }}
-  placeholder="Damage / Improvised Damage (example: 1d4)"
-  style={{
-    display: "block",
-    width: "100%",
-    marginTop: "8px",
-    padding: "8px",
-    borderRadius: "8px",
-  }}
-/>
-{(item.category === "Armor" || item.category === "Shield") && (
-  <input
-    type="number"
-    value={item.armorBonus ?? 0}
-    onChange={(event) => {
-      const updatedInventory = (selectedCharacter.inventory ?? []).map(
-        (inventoryItem) =>
-          inventoryItem.id === item.id
-            ? {
-                ...inventoryItem,
-                armorBonus: Number(event.target.value),
-              }
-            : inventoryItem
-      );
+          setCharacters((old) => {
+            const updated = old.map((character) =>
+              character.id === updatedCharacter.id
+                ? updatedCharacter
+                : character
+            );
 
-      const updatedCharacter = {
-        ...selectedCharacter,
-        inventory: updatedInventory,
-      };
+            localStorage.setItem(storageKey, JSON.stringify(updated));
+            return updated;
+          });
+        }}
+        placeholder="Example: 1d4"
+        style={{
+          display: "block",
+          width: "100%",
+          padding: "8px",
+          borderRadius: "8px",
+        }}
+      />
+    </label>
+  )}
 
-      setSelectedCharacter(updatedCharacter);
+  {(item.category === "Armor" || item.category === "Shield") && (
+    <div
+      style={{
+        marginTop: "8px",
+        padding: "10px",
+        border: "1px solid var(--border)",
+        borderRadius: "8px",
+      }}
+    >
+      <label style={{ display: "block" }}>
+        <span style={{ display: "block", marginBottom: "4px" }}>
+          Armor Rating
+        </span>
 
-      setCharacters((old) => {
-        const updated = old.map((character) =>
-          character.id === updatedCharacter.id
-            ? updatedCharacter
-            : character
-        );
+        <input
+          type="number"
+          min="0"
+          value={item.armorBonus ?? ""}
+          onChange={(event) => {
+            const updatedInventory = (selectedCharacter.inventory ?? []).map(
+              (inventoryItem) =>
+                inventoryItem.id === item.id
+                  ? {
+                      ...inventoryItem,
+                      armorBonus: Math.max(0, Number(event.target.value)),
+                    }
+                  : inventoryItem
+            );
 
-        localStorage.setItem(storageKey, JSON.stringify(updated));
-        return updated;
-      });
-    }}
-    placeholder="Armor Bonus"
-    style={{
-      display: "block",
-      width: "100%",
-      marginTop: "8px",
-      padding: "8px",
-      borderRadius: "8px",
-    }}
-  />
-)}
-{item.category === "Consumable" && (
+            const updatedCharacter = {
+              ...selectedCharacter,
+              inventory: updatedInventory,
+            };
+
+            setSelectedCharacter(updatedCharacter);
+
+            setCharacters((old) => {
+              const updated = old.map((character) =>
+                character.id === updatedCharacter.id
+                  ? updatedCharacter
+                  : character
+              );
+
+              localStorage.setItem(storageKey, JSON.stringify(updated));
+              return updated;
+            });
+          }}
+          placeholder="Example: 2"
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "8px",
+            borderRadius: "8px",
+          }}
+        />
+      </label>
+
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          marginTop: "8px",
+        }}
+      >
+        <label style={{ flex: 1 }}>
+          <span style={{ display: "block", marginBottom: "4px" }}>
+            Current Durability
+          </span>
+
+          <input
+            type="number"
+            min="0"
+            value={item.durability ?? ""}
+            onChange={(event) => {
+              const durability = Math.max(0, Number(event.target.value));
+
+              const updatedInventory = (selectedCharacter.inventory ?? []).map(
+                (inventoryItem) =>
+                  inventoryItem.id === item.id
+                    ? {
+                        ...inventoryItem,
+                        durability:
+                          inventoryItem.maxDurability !== undefined
+                            ? Math.min(durability, inventoryItem.maxDurability)
+                            : durability,
+                      }
+                    : inventoryItem
+              );
+
+              const updatedCharacter = {
+                ...selectedCharacter,
+                inventory: updatedInventory,
+              };
+
+              setSelectedCharacter(updatedCharacter);
+
+              setCharacters((old) => {
+                const updated = old.map((character) =>
+                  character.id === updatedCharacter.id
+                    ? updatedCharacter
+                    : character
+                );
+
+                localStorage.setItem(storageKey, JSON.stringify(updated));
+                return updated;
+              });
+            }}
+            placeholder="20"
+            style={{
+              width: "100%",
+              padding: "8px",
+              borderRadius: "8px",
+            }}
+          />
+        </label>
+
+        <label style={{ flex: 1 }}>
+          <span style={{ display: "block", marginBottom: "4px" }}>
+            Max Durability
+          </span>
+
+          <input
+            type="number"
+            min="0"
+            value={item.maxDurability ?? ""}
+            onChange={(event) => {
+              const maxDurability = Math.max(0, Number(event.target.value));
+
+              const updatedInventory = (selectedCharacter.inventory ?? []).map(
+                (inventoryItem) =>
+                  inventoryItem.id === item.id
+                    ? {
+                        ...inventoryItem,
+                        maxDurability,
+                        durability: Math.min(
+                          inventoryItem.durability ?? maxDurability,
+                          maxDurability
+                        ),
+                      }
+                    : inventoryItem
+              );
+
+              const updatedCharacter = {
+                ...selectedCharacter,
+                inventory: updatedInventory,
+              };
+
+              setSelectedCharacter(updatedCharacter);
+
+              setCharacters((old) => {
+                const updated = old.map((character) =>
+                  character.id === updatedCharacter.id
+                    ? updatedCharacter
+                    : character
+                );
+
+                localStorage.setItem(storageKey, JSON.stringify(updated));
+                return updated;
+              });
+            }}
+            placeholder="20"
+            style={{
+              width: "100%",
+              padding: "8px",
+              borderRadius: "8px",
+            }}
+          />
+        </label>
+      </div>
+    </div>
+  )}
+
+  {item.category === "Consumable" && (
   <input
     type="number"
     min="0"
