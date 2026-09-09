@@ -128,7 +128,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
   const [size, setSize] = useState<MonsterSize>("Medium");
 
   const [attacks, setAttacks] = useState<MonsterAttack[]>([]);
-  const [editingAttackId, setEditingAttackId] = useState<string | null>(null);
   const [attackName, setAttackName] = useState("");
   const [attackType, setAttackType] =
     useState<MonsterAttack["attackType"]>("Natural");
@@ -275,7 +274,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setAttacks([]);
     setAbilities([]);
     setPendingEffects([]);
-    resetAttackEditor();
   };
 
   const beginEdit = (monster: Monster) => {
@@ -296,7 +294,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setAttacks(monster.attacks ?? []);
     setAbilities(monster.abilities ?? []);
     setPendingEffects([]);
-    resetAttackEditor();
   };
 
   const clearEditor = () => {
@@ -314,7 +311,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setAttacks([]);
     setAbilities([]);
     setPendingEffects([]);
-    resetAttackEditor();
   };
 
   const openCreatureSheet = () => {
@@ -420,41 +416,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     );
   };
 
-  const resetAttackEditor = () => {
-    setEditingAttackId(null);
-    setAttackName("");
-    setAttackType("Natural");
-    setAttackDamage("");
-    setAttackDamageType("");
-    setAttackModifier(0);
-    setAttackRange("");
-    setAttackDescription("");
-    setPendingEffects([]);
-    resetEffectEditor();
-  };
-
-  const beginEditAttack = (attack: MonsterAttack) => {
-    setEditingAttackId(attack.id);
-    setAttackName(attack.name);
-    setAttackType(attack.attackType);
-    setAttackDamage(attack.damage);
-    setAttackDamageType(attack.damageType);
-    setAttackModifier(attack.attackModifier);
-    setAttackRange(attack.range);
-    setAttackDescription(attack.description);
-    setPendingEffects(
-      (attack.effects ?? []).map((effect) => ({
-        ...effect,
-      }))
-    );
-    resetEffectEditor();
-  };
-
-  const saveAttack = () => {
+  const addAttack = () => {
     if (!attackName.trim()) return;
 
     const attack: MonsterAttack = {
-      id: editingAttackId ?? crypto.randomUUID(),
+      id: crypto.randomUUID(),
       name: attackName.trim(),
       attackType,
       damage: attackDamage.trim(),
@@ -465,27 +431,31 @@ export function MonsterPage({ worldId }: { worldId: string }) {
       effects: [...pendingEffects],
     };
 
-    setAttacks((old) =>
-      editingAttackId
-        ? old.map((existing) =>
-            existing.id === editingAttackId
-              ? attack
-              : existing
-          )
-        : [...old, attack]
-    );
+    setAttacks((old) => [...old, attack]);
 
-    resetAttackEditor();
+    setAttackName("");
+    setAttackType("Natural");
+    setAttackDamage("");
+    setAttackModifier(0);
+    setAttackRange("");
+    setAttackDescription("");
+    setAttackDamageType("");
+    setPendingEffects([]);
+    resetEffectEditor();
+    setHasSecondaryEffect(false);
+    setEffectName("");
+    setEffectDamage("");
+    setEffectDamageType("");
+    setEffectSaveStat("None");
+    setEffectSaveDC(0);
+    setEffectFrequency("Every Round");
+    setEffectEndsOnSave(true);
   };
 
   const removeAttack = (id: string) => {
     setAttacks((old) =>
       old.filter((attack) => attack.id !== id)
     );
-
-    if (editingAttackId === id) {
-      resetAttackEditor();
-    }
   };
 
   const addAbility = () => {
@@ -1011,30 +981,14 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                 </div>
               )}
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    marginTop: "8px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => beginEditAttack(attack)}
-                  >
-                    Edit Attack
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => removeAttack(attack.id)}
-                  >
-                    Remove Attack
-                  </button>
-                </div>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => removeAttack(attack.id)}
+                style={{ marginTop: "8px" }}
+              >
+                Remove Attack
+              </button>
             </div>
           ))}
 
@@ -1541,23 +1495,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             <button
               type="button"
               className="btn"
-              onClick={saveAttack}
+              onClick={addAttack}
               style={{ marginTop: "10px" }}
             >
-              {editingAttackId ? "Save Attack Changes" : "Add Attack"}
+              Add Attack
             </button>
-
-
-              {editingAttackId && (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={resetAttackEditor}
-                  style={{ marginTop: "10px", marginLeft: "8px" }}
-                >
-                  Cancel Edit
-                </button>
-              )}
           </div>
 
           <h3 style={{ marginTop: "24px" }}>

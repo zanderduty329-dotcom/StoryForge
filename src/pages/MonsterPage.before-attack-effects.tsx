@@ -28,42 +28,14 @@ type MonsterSize =
   | "Huge"
   | "Gargantuan";
 
-type MonsterSaveStat =
-  | "None"
-  | "Strength"
-  | "Dexterity"
-  | "Constitution"
-  | "Intelligence"
-  | "Wisdom"
-  | "Charisma";
-
-type MonsterEffect = {
-  id: string;
-  name: string;
-  effectType: "Damage" | "Condition" | "Other";
-  trigger: "On Hit";
-  damage: string;
-  damageType: string;
-  condition: string;
-  saveStat: MonsterSaveStat;
-  saveDC: number;
-  frequency: "Once" | "Every Turn" | "Every Round";
-  durationAmount: number;
-  durationUnit: "Instant" | "Turn" | "Round" | "Until Save";
-  endsOnSuccessfulSave: boolean;
-  description: string;
-};
-
 type MonsterAttack = {
   id: string;
   name: string;
   attackType: "Natural" | "Weapon" | "Special";
   damage: string;
-  damageType: string;
   attackModifier: number;
   range: string;
   description: string;
-  effects: MonsterEffect[];
 };
 
 type MonsterAbility = {
@@ -128,41 +100,10 @@ export function MonsterPage({ worldId }: { worldId: string }) {
   const [size, setSize] = useState<MonsterSize>("Medium");
 
   const [attacks, setAttacks] = useState<MonsterAttack[]>([]);
-  const [editingAttackId, setEditingAttackId] = useState<string | null>(null);
   const [attackName, setAttackName] = useState("");
   const [attackType, setAttackType] =
     useState<MonsterAttack["attackType"]>("Natural");
   const [attackDamage, setAttackDamage] = useState("");
-  const [attackDamageType, setAttackDamageType] = useState("");
-
-  const [pendingEffects, setPendingEffects] =
-    useState<MonsterEffect[]>([]);
-
-  const [effectName, setEffectName] = useState("");
-  const [effectType, setEffectType] =
-    useState<MonsterEffect["effectType"]>("Damage");
-  const [effectDamage, setEffectDamage] = useState("");
-  const [effectDamageType, setEffectDamageType] = useState("");
-  const [effectCondition, setEffectCondition] = useState("");
-
-  const [effectSaveStat, setEffectSaveStat] =
-    useState<MonsterSaveStat>("None");
-  const [effectSaveDC, setEffectSaveDC] = useState(0);
-
-  const [effectFrequency, setEffectFrequency] =
-    useState<MonsterEffect["frequency"]>("Once");
-
-  const [effectDurationAmount, setEffectDurationAmount] =
-    useState(1);
-
-  const [effectDurationUnit, setEffectDurationUnit] =
-    useState<MonsterEffect["durationUnit"]>("Instant");
-
-  const [effectEndsOnSave, setEffectEndsOnSave] =
-    useState(true);
-
-  const [effectDescription, setEffectDescription] =
-    useState("");
   const [attackModifier, setAttackModifier] = useState(0);
   const [attackRange, setAttackRange] = useState("");
   const [attackDescription, setAttackDescription] = useState("");
@@ -191,53 +132,7 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             healthFormula: monster.healthFormula ?? "",
             movementSpeed: monster.movementSpeed ?? 30,
             size: monster.size ?? "Medium",
-            attacks: Array.isArray(monster.attacks)
-              ? monster.attacks.map((attack: any) => ({
-                  ...attack,
-                  damageType: attack.damageType ?? "",
-                  effects: Array.isArray(attack.effects)
-                    ? attack.effects.map((effect: any) => ({
-                        ...effect,
-                        id: effect.id ?? crypto.randomUUID(),
-                        name: effect.name ?? "Effect",
-                        effectType: effect.effectType ?? "Damage",
-                        trigger: "On Hit",
-                        damage: effect.damage ?? "",
-                        damageType: effect.damageType ?? "",
-                        condition: effect.condition ?? "",
-                        saveStat: effect.saveStat ?? "None",
-                        saveDC: effect.saveDC ?? 0,
-                        frequency: effect.frequency ?? "Once",
-                        durationAmount: effect.durationAmount ?? 1,
-                        durationUnit: effect.durationUnit ?? "Instant",
-                        endsOnSuccessfulSave:
-                          effect.endsOnSuccessfulSave ?? true,
-                        description: effect.description ?? "",
-                      }))
-                    : attack.secondaryEffect
-                      ? [{
-                          id: crypto.randomUUID(),
-                          name: attack.secondaryEffect.name ?? "Effect",
-                          effectType: "Damage",
-                          trigger: "On Hit",
-                          damage: attack.secondaryEffect.damage ?? "",
-                          damageType: attack.secondaryEffect.damageType ?? "",
-                          condition: "",
-                          saveStat: attack.secondaryEffect.saveStat ?? "None",
-                          saveDC: attack.secondaryEffect.saveDC ?? 0,
-                          frequency: attack.secondaryEffect.frequency ?? "Every Round",
-                          durationAmount: 1,
-                          durationUnit:
-                            attack.secondaryEffect.endsOnSuccessfulSave
-                              ? "Until Save"
-                              : "Round",
-                          endsOnSuccessfulSave:
-                            attack.secondaryEffect.endsOnSuccessfulSave ?? true,
-                          description: "",
-                        }]
-                      : [],
-                }))
-              : [],
+            attacks: Array.isArray(monster.attacks) ? monster.attacks : [],
             abilities: Array.isArray(monster.abilities) ? monster.abilities : [],
           }))
         : [];
@@ -274,8 +169,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setSize("Medium");
     setAttacks([]);
     setAbilities([]);
-    setPendingEffects([]);
-    resetAttackEditor();
   };
 
   const beginEdit = (monster: Monster) => {
@@ -295,8 +188,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setSize(monster.size ?? "Medium");
     setAttacks(monster.attacks ?? []);
     setAbilities(monster.abilities ?? []);
-    setPendingEffects([]);
-    resetAttackEditor();
   };
 
   const clearEditor = () => {
@@ -313,8 +204,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setSize("Medium");
     setAttacks([]);
     setAbilities([]);
-    setPendingEffects([]);
-    resetAttackEditor();
   };
 
   const openCreatureSheet = () => {
@@ -375,117 +264,33 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     }));
   };
 
-  const resetEffectEditor = () => {
-    setEffectName("");
-    setEffectType("Damage");
-    setEffectDamage("");
-    setEffectDamageType("");
-    setEffectCondition("");
-    setEffectSaveStat("None");
-    setEffectSaveDC(0);
-    setEffectFrequency("Once");
-    setEffectDurationAmount(1);
-    setEffectDurationUnit("Instant");
-    setEffectEndsOnSave(true);
-    setEffectDescription("");
-  };
-
-  const addEffect = () => {
-    if (!effectName.trim()) return;
-
-    const effect: MonsterEffect = {
-      id: crypto.randomUUID(),
-      name: effectName.trim(),
-      effectType,
-      trigger: "On Hit",
-      damage: effectDamage.trim(),
-      damageType: effectDamageType.trim(),
-      condition: effectCondition.trim(),
-      saveStat: effectSaveStat,
-      saveDC: effectSaveDC,
-      frequency: effectFrequency,
-      durationAmount: effectDurationAmount,
-      durationUnit: effectDurationUnit,
-      endsOnSuccessfulSave: effectEndsOnSave,
-      description: effectDescription.trim(),
-    };
-
-    setPendingEffects((old) => [...old, effect]);
-    resetEffectEditor();
-  };
-
-  const removePendingEffect = (id: string) => {
-    setPendingEffects((old) =>
-      old.filter((effect) => effect.id !== id)
-    );
-  };
-
-  const resetAttackEditor = () => {
-    setEditingAttackId(null);
-    setAttackName("");
-    setAttackType("Natural");
-    setAttackDamage("");
-    setAttackDamageType("");
-    setAttackModifier(0);
-    setAttackRange("");
-    setAttackDescription("");
-    setPendingEffects([]);
-    resetEffectEditor();
-  };
-
-  const beginEditAttack = (attack: MonsterAttack) => {
-    setEditingAttackId(attack.id);
-    setAttackName(attack.name);
-    setAttackType(attack.attackType);
-    setAttackDamage(attack.damage);
-    setAttackDamageType(attack.damageType);
-    setAttackModifier(attack.attackModifier);
-    setAttackRange(attack.range);
-    setAttackDescription(attack.description);
-    setPendingEffects(
-      (attack.effects ?? []).map((effect) => ({
-        ...effect,
-      }))
-    );
-    resetEffectEditor();
-  };
-
-  const saveAttack = () => {
+  const addAttack = () => {
     if (!attackName.trim()) return;
 
     const attack: MonsterAttack = {
-      id: editingAttackId ?? crypto.randomUUID(),
+      id: crypto.randomUUID(),
       name: attackName.trim(),
       attackType,
       damage: attackDamage.trim(),
-      damageType: attackDamageType.trim(),
       attackModifier,
       range: attackRange.trim(),
       description: attackDescription.trim(),
-      effects: [...pendingEffects],
     };
 
-    setAttacks((old) =>
-      editingAttackId
-        ? old.map((existing) =>
-            existing.id === editingAttackId
-              ? attack
-              : existing
-          )
-        : [...old, attack]
-    );
+    setAttacks((old) => [...old, attack]);
 
-    resetAttackEditor();
+    setAttackName("");
+    setAttackType("Natural");
+    setAttackDamage("");
+    setAttackModifier(0);
+    setAttackRange("");
+    setAttackDescription("");
   };
 
   const removeAttack = (id: string) => {
     setAttacks((old) =>
       old.filter((attack) => attack.id !== id)
     );
-
-    if (editingAttackId === id) {
-      resetAttackEditor();
-    }
   };
 
   const addAbility = () => {
@@ -522,14 +327,7 @@ export function MonsterPage({ worldId }: { worldId: string }) {
 
         <input
           value={search}
-          onChange={(event) => {
-            const value = event.target.value;
-            setSearch(value);
-
-            if (!value.trim()) {
-              clearEditor();
-            }
-          }}
+          onChange={(event) => setSearch(event.target.value)}
           placeholder="Search monsters..."
           style={{
             width: "100%",
@@ -934,7 +732,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
               <div style={{ marginTop: "4px", opacity: 0.8 }}>
                 {attack.attackType}
                 {attack.damage ? ` • ${attack.damage}` : ""}
-                {attack.damageType ? ` ${attack.damageType}` : ""}
                 {attack.attackModifier
                   ? ` • Modifier ${
                       attack.attackModifier > 0 ? "+" : ""
@@ -943,98 +740,20 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                 {attack.range ? ` • ${attack.range}` : ""}
               </div>
 
-                {attack.effects?.map((effect) => (
-                  <div
-                    key={effect.id}
-                    style={{
-                      marginTop: "6px",
-                      padding: "8px",
-                      border: "1px solid var(--border)",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    <strong>
-                      Effect: {effect.name}
-                    </strong>
-
-                    <div style={{ marginTop: "4px", opacity: 0.8 }}>
-                      {effect.effectType}
-                      {effect.damage
-                        ? ` • ${effect.damage}`
-                        : ""}
-                      {effect.damageType
-                        ? ` ${effect.damageType}`
-                        : ""}
-                      {effect.condition
-                        ? ` • ${effect.condition}`
-                        : ""}
-                    </div>
-
-                    <div style={{ marginTop: "4px", opacity: 0.8 }}>
-                      {effect.frequency}
-
-                      {effect.durationUnit !== "Instant" && (
-                        <>
-                          {" • Duration: "}
-                          {effect.durationUnit === "Until Save"
-                            ? "Until Save"
-                            : `${effect.durationAmount} ${effect.durationUnit}${
-                                effect.durationAmount === 1 ? "" : "s"
-                              }`}
-                        </>
-                      )}
-                    </div>
-
-                    {effect.saveStat !== "None" && (
-                      <div style={{ marginTop: "4px" }}>
-                        {effect.saveStat} Save
-                        {effect.saveDC
-                          ? ` • DC ${effect.saveDC}`
-                          : ""}
-                        {effect.endsOnSuccessfulSave
-                          ? " • Success ends/prevents effect"
-                          : ""}
-                      </div>
-                    )}
-
-                    {effect.description && (
-                      <div style={{ marginTop: "4px" }}>
-                        {effect.description}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
               {attack.description && (
                 <div style={{ marginTop: "4px" }}>
                   {attack.description}
                 </div>
               )}
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    marginTop: "8px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => beginEditAttack(attack)}
-                  >
-                    Edit Attack
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => removeAttack(attack.id)}
-                  >
-                    Remove Attack
-                  </button>
-                </div>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => removeAttack(attack.id)}
+                style={{ marginTop: "8px" }}
+              >
+                Remove Attack
+              </button>
             </div>
           ))}
 
@@ -1105,24 +824,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
               />
             </label>
 
-              <label style={{ display: "block", marginTop: "8px" }}>
-                Damage Type
-                <input
-                  value={attackDamageType}
-                  onChange={(event) =>
-                    setAttackDamageType(event.target.value)
-                  }
-                  placeholder="Example: Bludgeoning, Slashing, Fire"
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    marginTop: "4px",
-                    padding: "8px",
-                    borderRadius: "8px",
-                  }}
-                />
-              </label>
-
             <label style={{ display: "block", marginTop: "8px" }}>
               Attack Modifier
               <input
@@ -1172,353 +873,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
               />
             </label>
 
-
-              <div
-                style={{
-                  marginTop: "14px",
-                  padding: "10px",
-                  border: "1px solid var(--border)",
-                  borderRadius: "8px",
-                }}
-              >
-                <strong>Attack Effects</strong>
-
-                <div
-                  style={{
-                    marginTop: "4px",
-                    fontSize: "0.85em",
-                    opacity: 0.75,
-                  }}
-                >
-                  Add as many effects as this attack needs.
-                  Every effect can have its own saving throw.
-                  The DM can override any result during a live session.
-                </div>
-
-                {pendingEffects.map((effect, index) => (
-                  <div
-                    key={effect.id}
-                    style={{
-                      marginTop: "10px",
-                      padding: "8px",
-                      border: "1px solid var(--border)",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    <strong>
-                      Effect {index + 1}: {effect.name}
-                    </strong>
-
-                    <div style={{ marginTop: "4px", opacity: 0.8 }}>
-                      {effect.effectType}
-                      {effect.damage ? ` • ${effect.damage}` : ""}
-                      {effect.damageType
-                        ? ` ${effect.damageType}`
-                        : ""}
-                      {effect.condition
-                        ? ` • ${effect.condition}`
-                        : ""}
-                    </div>
-
-                    {effect.saveStat !== "None" && (
-                      <div style={{ marginTop: "4px" }}>
-                        {effect.saveStat} Save
-                        {effect.saveDC
-                          ? ` • DC ${effect.saveDC}`
-                          : ""}
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() =>
-                        removePendingEffect(effect.id)
-                      }
-                      style={{ marginTop: "6px" }}
-                    >
-                      Remove Effect
-                    </button>
-                  </div>
-                ))}
-
-                <label style={{ display: "block", marginTop: "12px" }}>
-                  Effect Name
-                  <input
-                    value={effectName}
-                    onChange={(event) =>
-                      setEffectName(event.target.value)
-                    }
-                    placeholder="Example: Staggered"
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      marginTop: "4px",
-                      padding: "8px",
-                      borderRadius: "8px",
-                    }}
-                  />
-                </label>
-
-                <label style={{ display: "block", marginTop: "8px" }}>
-                  Effect Type
-                  <select
-                    value={effectType}
-                    onChange={(event) =>
-                      setEffectType(
-                        event.target.value as MonsterEffect["effectType"]
-                      )
-                    }
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      marginTop: "4px",
-                      padding: "8px",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    <option value="Damage">Damage</option>
-                    <option value="Condition">Condition</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </label>
-
-                {effectType === "Damage" && (
-                  <>
-                    <label style={{ display: "block", marginTop: "8px" }}>
-                      Effect Damage
-                      <input
-                        value={effectDamage}
-                        onChange={(event) =>
-                          setEffectDamage(event.target.value)
-                        }
-                        placeholder="Example: 1d4"
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          marginTop: "4px",
-                          padding: "8px",
-                          borderRadius: "8px",
-                        }}
-                      />
-                    </label>
-
-                    <label style={{ display: "block", marginTop: "8px" }}>
-                      Damage Type
-                      <input
-                        value={effectDamageType}
-                        onChange={(event) =>
-                          setEffectDamageType(event.target.value)
-                        }
-                        placeholder="Example: Bludgeoning"
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          marginTop: "4px",
-                          padding: "8px",
-                          borderRadius: "8px",
-                        }}
-                      />
-                    </label>
-                  </>
-                )}
-
-                {effectType === "Condition" && (
-                  <label style={{ display: "block", marginTop: "8px" }}>
-                    Condition
-                    <input
-                      value={effectCondition}
-                      onChange={(event) =>
-                        setEffectCondition(event.target.value)
-                      }
-                      placeholder="Example: Immobilized"
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        marginTop: "4px",
-                        padding: "8px",
-                        borderRadius: "8px",
-                      }}
-                    />
-                  </label>
-                )}
-
-                <label style={{ display: "block", marginTop: "8px" }}>
-                  Saving Throw
-                  <select
-                    value={effectSaveStat}
-                    onChange={(event) =>
-                      setEffectSaveStat(
-                        event.target.value as MonsterSaveStat
-                      )
-                    }
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      marginTop: "4px",
-                      padding: "8px",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    <option value="None">None</option>
-                    <option value="Strength">Strength</option>
-                    <option value="Dexterity">Dexterity</option>
-                    <option value="Constitution">Constitution</option>
-                    <option value="Intelligence">Intelligence</option>
-                    <option value="Wisdom">Wisdom</option>
-                    <option value="Charisma">Charisma</option>
-                  </select>
-                </label>
-
-                {effectSaveStat !== "None" && (
-                  <label style={{ display: "block", marginTop: "8px" }}>
-                    Save DC
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={effectSaveDC}
-                      onChange={(event) => {
-                        const value = event.target.value;
-
-                        if (value === "" || /^\d+$/.test(value)) {
-                          setEffectSaveDC(
-                            value === "" ? 0 : Number(value)
-                          );
-                        }
-                      }}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        marginTop: "4px",
-                        padding: "8px",
-                        borderRadius: "8px",
-                      }}
-                    />
-                  </label>
-                )}
-
-                <label style={{ display: "block", marginTop: "8px" }}>
-                  Frequency
-                  <select
-                    value={effectFrequency}
-                    onChange={(event) =>
-                      setEffectFrequency(
-                        event.target.value as MonsterEffect["frequency"]
-                      )
-                    }
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      marginTop: "4px",
-                      padding: "8px",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    <option value="Once">Once</option>
-                    <option value="Every Turn">Every Turn</option>
-                    <option value="Every Round">Every Round</option>
-                  </select>
-                </label>
-
-                <label style={{ display: "block", marginTop: "8px" }}>
-                  Duration
-                  <select
-                    value={effectDurationUnit}
-                    onChange={(event) =>
-                      setEffectDurationUnit(
-                        event.target.value as MonsterEffect["durationUnit"]
-                      )
-                    }
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      marginTop: "4px",
-                      padding: "8px",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    <option value="Instant">Instant</option>
-                    <option value="Turn">Turn(s)</option>
-                    <option value="Round">Round(s)</option>
-                    <option value="Until Save">Until Save</option>
-                  </select>
-                </label>
-
-                {(effectDurationUnit === "Turn" ||
-                  effectDurationUnit === "Round") && (
-                  <label style={{ display: "block", marginTop: "8px" }}>
-                    Duration Amount
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={effectDurationAmount}
-                      onChange={(event) => {
-                        const value = event.target.value;
-
-                        if (value === "" || /^\d+$/.test(value)) {
-                          setEffectDurationAmount(
-                            value === "" ? 0 : Number(value)
-                          );
-                        }
-                      }}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        marginTop: "4px",
-                        padding: "8px",
-                        borderRadius: "8px",
-                      }}
-                    />
-                  </label>
-                )}
-
-                {effectSaveStat !== "None" && (
-                  <label
-                    style={{
-                      display: "block",
-                      marginTop: "10px",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={effectEndsOnSave}
-                      onChange={(event) =>
-                        setEffectEndsOnSave(event.target.checked)
-                      }
-                    />{" "}
-                    Successful save prevents / ends this effect
-                  </label>
-                )}
-
-                <label style={{ display: "block", marginTop: "8px" }}>
-                  Effect Notes
-                  <textarea
-                    value={effectDescription}
-                    onChange={(event) =>
-                      setEffectDescription(event.target.value)
-                    }
-                    placeholder="Optional details..."
-                    rows={2}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      marginTop: "4px",
-                      padding: "8px",
-                      borderRadius: "8px",
-                    }}
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={addEffect}
-                  style={{ marginTop: "10px" }}
-                >
-                  + Add Effect
-                </button>
-              </div>
-
             <label style={{ display: "block", marginTop: "8px" }}>
               Attack Description
               <textarea
@@ -1541,23 +895,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             <button
               type="button"
               className="btn"
-              onClick={saveAttack}
+              onClick={addAttack}
               style={{ marginTop: "10px" }}
             >
-              {editingAttackId ? "Save Attack Changes" : "Add Attack"}
+              Add Attack
             </button>
-
-
-              {editingAttackId && (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={resetAttackEditor}
-                  style={{ marginTop: "10px", marginLeft: "8px" }}
-                >
-                  Cancel Edit
-                </button>
-              )}
           </div>
 
           <h3 style={{ marginTop: "24px" }}>
