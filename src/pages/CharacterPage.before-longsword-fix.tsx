@@ -106,12 +106,6 @@ const itemTemplates: ItemTemplate[] = [
     damage: "1d6",
     description: "A light one-handed sword.",
   },
-    {
-      name: "Long Sword",
-      category: "Weapon",
-      damage: "1d6",
-      description: "A versatile one-handed steel sword.",
-    },
 ];
 
 function randomItem(items: string[]) {
@@ -781,8 +775,7 @@ const effectiveArmor =
   <option value="Other" />
 </datalist>
 
-  {itemTemplateName === "Create New Item" &&
-    itemCategory === "Weapon" && (
+  {itemCategory === "Weapon" && (
     <label style={{ display: "block", marginTop: "8px" }}>
       <span style={{ display: "block", marginBottom: "4px" }}>
         New Weapon Damage
