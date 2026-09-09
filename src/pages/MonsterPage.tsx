@@ -789,7 +789,10 @@ export function MonsterPage({ worldId }: { worldId: string }) {
 
           {sheetOpen && (
             <>
-          <h3 style={{ marginTop: "20px" }}>Health</h3>
+<details style={{ marginTop: "20px" }}>
+  <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+    Health
+  </summary>
 
           <div
             style={{
@@ -868,7 +871,12 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             </label>
           )}
 
-          <h3 style={{ marginTop: "20px" }}>Movement</h3>
+</details>
+
+<details style={{ marginTop: "20px" }}>
+  <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+    Movement
+  </summary>
 
           <label style={{ display: "block", marginTop: "8px" }}>
             Movement Speed (ft per turn)
@@ -898,7 +906,12 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             />
           </label>
 
-          <h3 style={{ marginTop: "20px" }}>Core Stats</h3>
+</details>
+
+<details style={{ marginTop: "20px" }}>
+  <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+    Core Stats
+  </summary>
 
           <label style={{ display: "block", marginTop: "8px" }}>
             Armor
@@ -1007,9 +1020,13 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             </div>
           ))}
 
-          <h3 style={{ marginTop: "24px" }}>
-            Defenses & Traits
-          </h3>
+       </details>
+
+          <details style={{ marginTop: "24px" }}>
+<summary style={{ cursor: "pointer", fontWeight: 700, padding: "10px", border: "1px solid var(--border)", borderRadius: "8px" }}>
+Defenses & Traits
+</summary>
+
 
           <div
             style={{
@@ -1226,9 +1243,13 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             )}
           </div>
 
-          <h3 style={{ marginTop: "24px" }}>
-            Attacks
-          </h3>
+          
+</details>
+<details style={{ marginTop: "24px" }}>
+<summary style={{ cursor: "pointer", fontWeight: 700, padding: "10px", border: "1px solid var(--border)", borderRadius: "8px" }}>
+Attacks
+</summary>
+
 
           {attacks.map((attack) => (
             <div
@@ -1253,7 +1274,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                 {attack.range ? ` • ${attack.range}` : ""}
               </div>
 
-                {attack.effects?.map((effect) => (
+                <details style={{ marginTop: "24px" }}>
+<summary style={{ cursor: "pointer", fontWeight: 700, padding: "10px", border: "1px solid var(--border)", borderRadius: "8px" }}>
+Saved Attack Effects
+</summary>
+{attack.effects?.map((effect) => (
                   <div
                     key={effect.id}
                     style={{
@@ -1314,6 +1339,8 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                     )}
                   </div>
                 ))}
+</details>
+
 
               {attack.description && (
                 <div style={{ marginTop: "4px" }}>
@@ -1491,7 +1518,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                   borderRadius: "8px",
                 }}
               >
-                <strong>Attack Effects</strong>
+                <details style={{ marginTop: "24px" }}>
+<summary style={{ cursor: "pointer", fontWeight: 700, padding: "10px", border: "1px solid var(--border)", borderRadius: "8px" }}>
+Attack Effects
+</summary>
+
 
                 <div
                   style={{
@@ -1827,6 +1858,8 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                 >
                   + Add Effect
                 </button>
+</details>
+
               </div>
 
             <label style={{ display: "block", marginTop: "8px" }}>
@@ -1870,9 +1903,13 @@ export function MonsterPage({ worldId }: { worldId: string }) {
               )}
           </div>
 
-          <h3 style={{ marginTop: "24px" }}>
-            Abilities & Traits
-          </h3>
+          
+</details>
+<details style={{ marginTop: "24px" }}>
+<summary style={{ cursor: "pointer", fontWeight: 700, padding: "10px", border: "1px solid var(--border)", borderRadius: "8px" }}>
+Abilities & Traits
+</summary>
+
 
           {abilities.map((ability) => (
             <div
@@ -1958,7 +1995,9 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             </button>
           </div>
 
-        <div
+        
+</details>
+<div
           style={{
             display: "flex",
             gap: "8px",
@@ -1978,7 +2017,7 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             className="btn"
             onClick={clearEditor}
           >
-            Clear
+           Close Without Saving
           </button>
         </div>
             </>

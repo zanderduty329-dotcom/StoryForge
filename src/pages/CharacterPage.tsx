@@ -133,11 +133,12 @@ const [itemTemplateName, setItemTemplateName] = useState("Create New Item");
 const [itemTemplateSearch, setItemTemplateSearch] = useState("");
 const [customItemTemplates, setCustomItemTemplates] = useState<ItemTemplate[]>([]);
 const [pendingCompendiumItem, setPendingCompendiumItem] = useState<ItemTemplate | null>(null);
-const [showStats, setShowStats] = useState(true);
-const [showInventory, setShowInventory] = useState(true);
-const [showDescription, setShowDescription] = useState(true);
-const [showPersonality, setShowPersonality] = useState(true);
-const [showNotes, setShowNotes] = useState(true);
+const [showStats, setShowStats] = useState(false);
+const [showInventory, setShowInventory] = useState(false);
+const [inventorySearch, setInventorySearch] = useState("");
+const [showDescription, setShowDescription] = useState(false);
+const [showPersonality, setShowPersonality] = useState(false);
+const [showNotes, setShowNotes] = useState(false);
 const [itemCategory, setItemCategory] = useState("Weapon");
 
   const allItemTemplates = [
@@ -334,7 +335,15 @@ const effectiveArmor =
         .map((character) => (
 <div
   key={character.id}
-  onClick={() => setSelectedCharacter(character)}
+  onClick={() => {
+    setShowStats(false);
+    setShowInventory(false);
+    setShowDescription(false);
+    setShowPersonality(false);
+    setShowNotes(false);
+    setInventorySearch("");
+    setSelectedCharacter(character);
+  }}
   style={{ cursor: "pointer", marginBottom: "8px" }}
 >
             🎭 {character.name} — {character.ancestry} {character.role}
@@ -347,7 +356,15 @@ const effectiveArmor =
         .map((character) => (
 <div
   key={character.id}
-  onClick={() => setSelectedCharacter(character)}
+  onClick={() => {
+    setShowStats(false);
+    setShowInventory(false);
+    setShowDescription(false);
+    setShowPersonality(false);
+    setShowNotes(false);
+    setInventorySearch("");
+    setSelectedCharacter(character);
+  }}
   style={{ cursor: "pointer", marginBottom: "8px" }}
 >
             👤 {character.name} — {character.ancestry} {character.role}
@@ -1006,8 +1023,30 @@ const effectiveArmor =
     </div>
   )}
 
-{(selectedCharacter.inventory ?? []).map((item) => (
-  <div
+<label style={{ display: "block", marginTop: "16px" }}>
+  Search this character's inventory
+  <input
+    type="search"
+    value={inventorySearch}
+    onChange={(event) => setInventorySearch(event.target.value)}
+    placeholder="Search carried items..."
+    style={{
+      display: "block", width: "100%", padding: "8px",
+      marginTop: "6px", borderRadius: "8px"
+    }}
+  />
+</label>
+
+{!(selectedCharacter.inventory ?? []).some((item) =>
+  item.name.toLowerCase().includes(inventorySearch.trim().toLowerCase())
+) && <p>No carried items match.</p>}
+
+{(selectedCharacter.inventory ?? [])
+  .filter((item) =>
+    item.name.toLowerCase().includes(inventorySearch.trim().toLowerCase())
+  )
+  .map((item) => (
+  <details
     key={item.id}
     style={{
       marginTop: "12px",
@@ -1016,6 +1055,12 @@ const effectiveArmor =
       borderRadius: "8px",
     }}
   >
+    <summary style={{ cursor: "pointer", padding: "4px" }}>
+      <strong>{item.name || "Unnamed Item"}</strong>
+      {" · "}{item.category || "Other"}
+      {item.equipped ? " · Equipped" : ""}
+    </summary>
+
       <label style={{ display: "block" }}>
         <span style={{ display: "block", marginBottom: "4px" }}>
           Item Name
@@ -1459,7 +1504,7 @@ onChange={(event) => {
   Remove Item
 </button>
 
-    </div>
+    </details>
   ))}
 
   </div>
