@@ -28,7 +28,6 @@ inventory?: {
 stats?: {
   health: number;
   armor: number;
-  movementSpeed: number;
   damage: number;
   strength: number;
   dexterity: number;
@@ -167,10 +166,9 @@ const upgraded = parsed.map((character) => ({
   ...character,
 level: character.level ?? 1,
 inventory: character.inventory ?? [],
-  stats: {
+  stats: character.stats ?? {
     health: 10,
     armor: 10,
-    movementSpeed: 30,
     damage: 1,
     strength: 10,
     dexterity: 10,
@@ -178,7 +176,6 @@ inventory: character.inventory ?? [],
     intelligence: 10,
     wisdom: 10,
     charisma: 10,
-    ...(character.stats ?? {}),
   },
 }));
 
@@ -203,7 +200,6 @@ inventory: [],
 stats: {
   health: 10,
   armor: 10,
-  movementSpeed: 30,
   damage: 1,
   strength: 10,
   dexterity: 10,
@@ -543,23 +539,7 @@ const effectiveArmor =
   />
 </label>
 
-  <br />
-
-  <label>
-    👣 Movement Speed:
-    <input
-      type="number"
-      min={0}
-      value={selectedCharacter.stats.movementSpeed}
-      onChange={(event) =>
-        updateStat("movementSpeed", Number(event.target.value))
-      }
-      style={{ marginLeft: "8px", width: "80px" }}
-    />
-    <span style={{ marginLeft: "4px" }}>ft / turn</span>
-  </label>
-
-  <br />
+<br />
 
 <label>
   ⚔️ Damage:

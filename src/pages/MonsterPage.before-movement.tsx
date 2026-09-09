@@ -28,7 +28,6 @@ type Monster = {
   modifiers: MonsterModifiers;
   healthMode: "fixed" | "rolled";
   healthFormula: string;
-  movementSpeed: number;
 };
 
 const blankMonsterStats: MonsterStats = {
@@ -67,7 +66,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
   });
   const [healthMode, setHealthMode] = useState<"fixed" | "rolled">("fixed");
   const [healthFormula, setHealthFormula] = useState("");
-  const [movementSpeed, setMovementSpeed] = useState(30);
 
   useEffect(() => {
     try {
@@ -87,7 +85,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             },
             healthMode: monster.healthMode ?? "fixed",
             healthFormula: monster.healthFormula ?? "",
-            movementSpeed: monster.movementSpeed ?? 30,
           }))
         : [];
 
@@ -117,7 +114,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setModifiers({ ...blankMonsterModifiers });
     setHealthMode("fixed");
     setHealthFormula("");
-    setMovementSpeed(30);
   };
 
   const beginEdit = (monster: Monster) => {
@@ -131,7 +127,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     });
     setHealthMode(monster.healthMode ?? "fixed");
     setHealthFormula(monster.healthFormula ?? "");
-    setMovementSpeed(monster.movementSpeed ?? 30);
   };
 
   const clearEditor = () => {
@@ -142,7 +137,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setModifiers({ ...blankMonsterModifiers });
     setHealthMode("fixed");
     setHealthFormula("");
-    setMovementSpeed(30);
   };
 
   const saveMonster = () => {
@@ -158,7 +152,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
       modifiers: { ...modifiers },
       healthMode,
       healthFormula: healthFormula.trim(),
-      movementSpeed,
     };
 
     const updated = editingId
@@ -352,15 +345,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
               Base Health
               <input
                 type="number"
-              onWheel={(event) => event.currentTarget.blur()}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "ArrowUp" ||
-                  event.key === "ArrowDown"
-                ) {
-                  event.preventDefault();
-                }
-              }}
                 min={0}
                 value={stats.health}
                 onChange={(event) =>
@@ -395,51 +379,12 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             </label>
           )}
 
-          <h3 style={{ marginTop: "20px" }}>Movement</h3>
-
-          <label style={{ display: "block", marginTop: "8px" }}>
-            Movement Speed (ft per turn)
-            <input
-              type="number"
-              onWheel={(event) => event.currentTarget.blur()}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "ArrowUp" ||
-                  event.key === "ArrowDown"
-                ) {
-                  event.preventDefault();
-                }
-              }}
-              min={0}
-              value={movementSpeed}
-              onChange={(event) =>
-                setMovementSpeed(Number(event.target.value))
-              }
-              style={{
-                display: "block",
-                width: "100%",
-                marginTop: "4px",
-                padding: "8px",
-                borderRadius: "8px",
-              }}
-            />
-          </label>
-
           <h3 style={{ marginTop: "20px" }}>Core Stats</h3>
 
           <label style={{ display: "block", marginTop: "8px" }}>
             Armor
             <input
               type="number"
-              onWheel={(event) => event.currentTarget.blur()}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "ArrowUp" ||
-                  event.key === "ArrowDown"
-                ) {
-                  event.preventDefault();
-                }
-              }}
               min={0}
               value={stats.armor}
               onChange={(event) =>
@@ -479,15 +424,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                 {label}
                 <input
                   type="number"
-              onWheel={(event) => event.currentTarget.blur()}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "ArrowUp" ||
-                  event.key === "ArrowDown"
-                ) {
-                  event.preventDefault();
-                }
-              }}
                   value={stats[stat]}
                   onChange={(event) =>
                     updateStat(stat, Number(event.target.value))
@@ -506,15 +442,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                 Modifier
                 <input
                   type="number"
-              onWheel={(event) => event.currentTarget.blur()}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "ArrowUp" ||
-                  event.key === "ArrowDown"
-                ) {
-                  event.preventDefault();
-                }
-              }}
                   value={modifiers[stat]}
                   onChange={(event) =>
                     updateModifier(
