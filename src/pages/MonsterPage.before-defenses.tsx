@@ -72,15 +72,6 @@ type MonsterAbility = {
   description: string;
 };
 
-type MonsterDefense = {
-  id: string;
-  name: string;
-  defenseType: "Natural Armor";
-  armorBonus: number;
-  damageReduction: number;
-  description: string;
-};
-
 type Monster = {
   id: string;
   name: string;
@@ -93,7 +84,6 @@ type Monster = {
   size: MonsterSize;
   attacks: MonsterAttack[];
   abilities: MonsterAbility[];
-  defenses: MonsterDefense[];
 };
 
 const blankMonsterStats: MonsterStats = {
@@ -181,18 +171,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
   const [abilityName, setAbilityName] = useState("");
   const [abilityDescription, setAbilityDescription] = useState("");
 
-
-  const [defenses, setDefenses] = useState<MonsterDefense[]>([]);
-  const [editingDefenseId, setEditingDefenseId] =
-    useState<string | null>(null);
-
-  const [defenseName, setDefenseName] = useState("");
-  const [defenseArmorBonus, setDefenseArmorBonus] = useState(0);
-  const [defenseDamageReduction, setDefenseDamageReduction] =
-    useState(0);
-  const [defenseDescription, setDefenseDescription] =
-    useState("");
-
   useEffect(() => {
     try {
       const saved = localStorage.getItem(storageKey);
@@ -261,17 +239,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                 }))
               : [],
             abilities: Array.isArray(monster.abilities) ? monster.abilities : [],
-            defenses: Array.isArray(monster.defenses)
-              ? monster.defenses.map((defense: any) => ({
-                  ...defense,
-                  id: defense.id ?? crypto.randomUUID(),
-                  name: defense.name ?? "Natural Defense",
-                  defenseType: "Natural Armor",
-                  armorBonus: defense.armorBonus ?? 0,
-                  damageReduction: defense.damageReduction ?? 0,
-                  description: defense.description ?? "",
-                }))
-              : [],
           }))
         : [];
 
@@ -307,8 +274,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setSize("Medium");
     setAttacks([]);
     setAbilities([]);
-    setDefenses([]);
-    setEditingDefenseId(null);
     setPendingEffects([]);
     resetAttackEditor();
   };
@@ -330,8 +295,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setSize(monster.size ?? "Medium");
     setAttacks(monster.attacks ?? []);
     setAbilities(monster.abilities ?? []);
-    setDefenses(monster.defenses ?? []);
-    setEditingDefenseId(null);
     setPendingEffects([]);
     resetAttackEditor();
   };
@@ -350,8 +313,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setSize("Medium");
     setAttacks([]);
     setAbilities([]);
-    setDefenses([]);
-    setEditingDefenseId(null);
     setPendingEffects([]);
     resetAttackEditor();
   };
@@ -379,7 +340,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
       size,
       attacks,
       abilities,
-      defenses,
     };
 
     const updated = editingId
@@ -525,57 +485,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
 
     if (editingAttackId === id) {
       resetAttackEditor();
-    }
-  };
-
-  const resetDefenseEditor = () => {
-    setEditingDefenseId(null);
-    setDefenseName("");
-    setDefenseArmorBonus(0);
-    setDefenseDamageReduction(0);
-    setDefenseDescription("");
-  };
-
-  const beginEditDefense = (defense: MonsterDefense) => {
-    setEditingDefenseId(defense.id);
-    setDefenseName(defense.name);
-    setDefenseArmorBonus(defense.armorBonus);
-    setDefenseDamageReduction(defense.damageReduction);
-    setDefenseDescription(defense.description);
-  };
-
-  const saveDefense = () => {
-    if (!defenseName.trim()) return;
-
-    const defense: MonsterDefense = {
-      id: editingDefenseId ?? crypto.randomUUID(),
-      name: defenseName.trim(),
-      defenseType: "Natural Armor",
-      armorBonus: defenseArmorBonus,
-      damageReduction: Math.max(0, defenseDamageReduction),
-      description: defenseDescription.trim(),
-    };
-
-    setDefenses((old) =>
-      editingDefenseId
-        ? old.map((existing) =>
-            existing.id === editingDefenseId
-              ? defense
-              : existing
-          )
-        : [...old, defense]
-    );
-
-    resetDefenseEditor();
-  };
-
-  const removeDefense = (id: string) => {
-    setDefenses((old) =>
-      old.filter((defense) => defense.id !== id)
-    );
-
-    if (editingDefenseId === id) {
-      resetDefenseEditor();
     }
   };
 
@@ -1006,225 +915,6 @@ export function MonsterPage({ worldId }: { worldId: string }) {
               </label>
             </div>
           ))}
-
-          <h3 style={{ marginTop: "24px" }}>
-            Defenses & Traits
-          </h3>
-
-          <div
-            style={{
-              fontSize: "0.85em",
-              opacity: 0.75,
-              marginTop: "4px",
-            }}
-          >
-            Natural defenses are separate from worn armor.
-            Worn armor can later act as a durability barrier,
-            while these defenses remain part of the creature.
-          </div>
-
-          {defenses.map((defense) => (
-            <div
-              key={defense.id}
-              style={{
-                marginTop: "8px",
-                padding: "10px",
-                border: "1px solid var(--border)",
-                borderRadius: "8px",
-              }}
-            >
-              <strong>{defense.name}</strong>
-
-              <div style={{ marginTop: "4px", opacity: 0.8 }}>
-                {defense.defenseType}
-                {defense.armorBonus
-                  ? ` • Armor Bonus ${
-                      defense.armorBonus > 0 ? "+" : ""
-                    }${defense.armorBonus}`
-                  : ""}
-                {defense.damageReduction
-                  ? ` • Damage Reduction ${defense.damageReduction}`
-                  : ""}
-              </div>
-
-              {defense.description && (
-                <div style={{ marginTop: "4px" }}>
-                  {defense.description}
-                </div>
-              )}
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  marginTop: "8px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => beginEditDefense(defense)}
-                >
-                  Edit Defense
-                </button>
-
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => removeDefense(defense.id)}
-                >
-                  Remove Defense
-                </button>
-              </div>
-            </div>
-          ))}
-
-          <div
-            style={{
-              marginTop: "10px",
-              padding: "10px",
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-            }}
-          >
-            <label style={{ display: "block" }}>
-              Defense Name
-              <input
-                value={defenseName}
-                onChange={(event) =>
-                  setDefenseName(event.target.value)
-                }
-                placeholder="Example: Hardened Skin"
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "4px",
-                  padding: "8px",
-                  borderRadius: "8px",
-                }}
-              />
-            </label>
-
-            <label style={{ display: "block", marginTop: "8px" }}>
-              Defense Type
-              <select
-                value="Natural Armor"
-                disabled
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "4px",
-                  padding: "8px",
-                  borderRadius: "8px",
-                }}
-              >
-                <option value="Natural Armor">
-                  Natural Armor
-                </option>
-              </select>
-            </label>
-
-            <label style={{ display: "block", marginTop: "8px" }}>
-              Armor Bonus
-              <input
-                type="text"
-                inputMode="numeric"
-                value={defenseArmorBonus}
-                onChange={(event) => {
-                  const value = event.target.value;
-
-                  if (
-                    value === "" ||
-                    value === "-" ||
-                    /^-?\d+$/.test(value)
-                  ) {
-                    setDefenseArmorBonus(
-                      value === "" || value === "-"
-                        ? 0
-                        : Number(value)
-                    );
-                  }
-                }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "4px",
-                  padding: "8px",
-                  borderRadius: "8px",
-                }}
-              />
-            </label>
-
-            <label style={{ display: "block", marginTop: "8px" }}>
-              Damage Reduction
-              <input
-                type="text"
-                inputMode="numeric"
-                value={defenseDamageReduction}
-                onChange={(event) => {
-                  const value = event.target.value;
-
-                  if (value === "" || /^\d+$/.test(value)) {
-                    setDefenseDamageReduction(
-                      value === "" ? 0 : Number(value)
-                    );
-                  }
-                }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "4px",
-                  padding: "8px",
-                  borderRadius: "8px",
-                }}
-              />
-            </label>
-
-            <label style={{ display: "block", marginTop: "8px" }}>
-              Defense Notes
-              <textarea
-                value={defenseDescription}
-                onChange={(event) =>
-                  setDefenseDescription(event.target.value)
-                }
-                placeholder="Example: Thick natural hide protects the orc even without worn armor."
-                rows={2}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "4px",
-                  padding: "8px",
-                  borderRadius: "8px",
-                }}
-              />
-            </label>
-
-            <button
-              type="button"
-              className="btn"
-              onClick={saveDefense}
-              style={{ marginTop: "10px" }}
-            >
-              {editingDefenseId
-                ? "Save Defense Changes"
-                : "Add Defense"}
-            </button>
-
-            {editingDefenseId && (
-              <button
-                type="button"
-                className="btn"
-                onClick={resetDefenseEditor}
-                style={{
-                  marginTop: "10px",
-                  marginLeft: "8px",
-                }}
-              >
-                Cancel Edit
-              </button>
-            )}
-          </div>
 
           <h3 style={{ marginTop: "24px" }}>
             Attacks
