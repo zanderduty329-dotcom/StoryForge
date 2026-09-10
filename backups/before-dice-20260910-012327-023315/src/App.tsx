@@ -1,4 +1,3 @@
-import { DicePage } from "./pages/DicePage";
 import { StoryBiblePage } from "./pages/StoryBiblePage";
 import { useState, useEffect, useCallback } from "react";
 import { HomePage } from "./pages/HomePage";
@@ -21,7 +20,6 @@ export type Page =
   | "locations"
   | "lore"
   | "maps"
-  | "dice"
   | "inspiration"
   | "session";
 
@@ -68,7 +66,6 @@ const fetchWorlds = useCallback(() => {
     { key: "locations", icon: "🗺️", label: "Locations", needsWorld: true },
     { key: "lore", icon: "📜", label: "Lore", needsWorld: true },
     { key: "maps", icon: "🧭", label: "Maps", needsWorld: true },
-    { key: "dice", icon: "🎲", label: "Dice", needsWorld: false },
     { key: "inspiration", icon: "🎲", label: "Inspiration", needsWorld: false },
     { key: "session", icon: "⚔️", label: "Live Session", needsWorld: true },
   ];
@@ -113,7 +110,6 @@ const fetchWorlds = useCallback(() => {
             {page === "locations" && "Location & World Archive"}
             {page === "lore" && "Lore Archive"}
             {page === "maps" && "Map System"}
-            {page === "dice" && "Dice Roller"}
             {page === "inspiration" && "Inspiration Mode — Story Dice"}
             {page === "session" && "Live Campaign Session"}
           </h1>
@@ -137,7 +133,6 @@ const fetchWorlds = useCallback(() => {
           {page === "locations" && activeWorld && <LocationPage worldId={activeWorld.id} />}
           {page === "lore" && activeWorld && <LorePage worldId={activeWorld.id} />}
           {page === "maps" && activeWorld && <MapPage worldId={activeWorld.id} />}
-          {page === "dice" && <DicePage worldId={activeWorld?.id} />}
           {page === "inspiration" && <InspirationPage />}
           {page === "session" && activeWorld && <SessionPage worldId={activeWorld.id} />}
         </div>

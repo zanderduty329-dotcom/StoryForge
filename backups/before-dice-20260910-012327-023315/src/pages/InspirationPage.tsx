@@ -1,4 +1,3 @@
-import { rollDie as roll } from "../lib/dice";
 import { useState } from "react";
 
 type Die = {
@@ -93,6 +92,9 @@ const promptTables = {
   Chaos: Array.from({ length: 100 }, (_, i) => `Chaos result ${i + 1}`),
 };
 
+function roll(sides: number) {
+  return Math.floor(Math.random() * sides) + 1;
+}
 
 export function InspirationPage() {
   const [result, setResult] = useState("Choose a die or let StoryForge surprise you.");

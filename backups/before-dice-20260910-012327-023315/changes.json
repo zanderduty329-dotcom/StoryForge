@@ -1,0 +1,14 @@
+{
+  "modified": [
+    "src/pages/SessionPage.tsx",
+    "src/App.tsx",
+    "src/pages/InspirationPage.tsx"
+  ],
+  "created": [
+    "src/lib/dice.ts",
+    "src/lib/diceArchive.ts",
+    "src/components/DiceTray.tsx",
+    "src/components/DiceTray.css",
+    "src/pages/DicePage.tsx"
+  ]
+}

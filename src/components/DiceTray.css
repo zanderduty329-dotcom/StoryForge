@@ -1,0 +1,28 @@
+.sf-dice { max-width: 780px; width: 100%; min-width: 0; }
+.sf-dice, .sf-dice * { box-sizing: border-box; }
+.sf-dice-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.sf-dice-presets > button { min-width: 64px; min-height: 44px; }
+.sf-dice-secondary { margin-top: 10px; }
+.sf-dice-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.sf-dice label { display: block; min-width: 0; }
+.sf-dice input, .sf-dice select { display: block; width: 100%; min-width: 0; margin-top: 6px; padding: 10px; border: 1px solid var(--border, GrayText); border-radius: 8px; background: var(--bg-secondary, Canvas); color: var(--text-primary, CanvasText); font: inherit; }
+.sf-dice input:focus-visible, .sf-dice select:focus-visible, .sf-dice summary:focus-visible { outline: 2px solid var(--accent, Highlight); outline-offset: 2px; }
+.sf-dice-full-label { margin: 12px 0; }
+.sf-dice-context, .sf-dice-result { border: 1px solid var(--border, GrayText); border-radius: 12px; padding: 16px; margin-top: 18px; }
+.sf-dice summary { cursor: pointer; padding: 5px 0; overflow-wrap: anywhere; }
+.sf-dice-context > summary, .sf-dice-history > summary { font-weight: 600; }
+.sf-dice-preview { margin: 16px 0 10px; overflow-wrap: anywhere; }
+.sf-dice-muted { color: var(--text-secondary, GrayText); font-size: 0.9em; margin-top: 6px; }
+.sf-dice-roll { min-height: 48px; width: 100%; overflow-wrap: anywhere; }
+.sf-dice-total { font-size: 2.8rem; font-weight: 700; line-height: 1.2; margin: 8px 0; font-variant-numeric: tabular-nums; }
+.sf-dice-breakdown { display: grid; gap: 5px; overflow-wrap: anywhere; }
+.sf-dice-error { border-left: 3px solid var(--accent, Highlight); padding-left: 10px; }
+.sf-dice-history { margin-top: 24px; }
+.sf-dice-history-item { border-top: 1px solid var(--border, GrayText); padding: 8px 0; }
+.sf-dice-history-item .sf-dice-breakdown { padding: 10px 0; }
+.sf-dice-dialog { width: min(780px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); padding: 20px; border: 1px solid var(--border, GrayText); border-radius: 14px; background: var(--bg-primary, Canvas); color: var(--text-primary, CanvasText); }
+.sf-dice-dialog::backdrop { background: rgb(0 0 0 / 55%); }
+.sf-dice-dialog-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+.sf-dice-dialog-header h3 { margin: 0; }
+.sf-dice-dialog-header button { min-height: 44px; }
+@media (max-width: 560px) { .sf-dice-fields { grid-template-columns: 1fr; } .sf-dice-context, .sf-dice-result { padding: 12px; } .sf-dice-dialog { padding: 12px; } .sf-dice input, .sf-dice select { font-size: 16px; } }
