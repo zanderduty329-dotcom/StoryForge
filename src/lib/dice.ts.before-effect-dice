@@ -13,7 +13,7 @@ export type EntityRef = {
 };
 export type RollSource = {
   owner: EntityRef;
-  kind: "monster-attack" | "inventory-item" | "monster-effect" | "item-effect";
+  kind: "monster-attack" | "inventory-item" | "monster-effect";
   id: string;
   name: string;
   attackId?: string;

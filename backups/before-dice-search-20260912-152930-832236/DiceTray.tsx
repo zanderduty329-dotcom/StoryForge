@@ -1,8 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { rollDice, signed, statModifier, STAT_KEYS } from "../lib/dice";
 import type { RollMode, RollPurpose, RollResult, StatKey } from "../lib/dice";
 import { readActors, readHistory, recordRoll } from "../lib/diceArchive";
-import type { DiceActor } from "../lib/diceArchive";
 import "./DiceTray.css";
 
 const title = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
@@ -11,100 +10,6 @@ const PURPOSES: { value: RollPurpose; label: string }[] = [
   { value: "damage", label: "Damage" }, { value: "save", label: "Saving throw" },
   { value: "check", label: "Stat / skill check" },
 ];
-
-// StoryForge dice actor search v2
-function ActorSearch({ label, searchLabel, emptyLabel, actors, value, disabled, onChange }: {
-  label: string;
-  searchLabel: string;
-  emptyLabel: string;
-  actors: DiceActor[];
-  value: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}) {
-  const inputId = useId();
-  const listId = `${inputId}-matches`;
-  const input = useRef<HTMLInputElement>(null);
-  const list = useRef<HTMLUListElement>(null);
-  const selected = actors.find((item) => item.key === value);
-  const [query, setQuery] = useState(selected?.ref.name ?? "");
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const matches = actors.filter((item) => item.ref.name.toLocaleLowerCase().includes(normalizedQuery));
-  const expanded = open && !disabled;
-  const describe = (item: DiceActor) => `${item.ref.name} · ${item.ref.kind === "monster" ? "Monster template" : title(item.ref.kind)}`;
-
-  useEffect(() => {
-    setQuery(selected?.ref.name ?? "");
-    setActiveIndex(-1);
-  }, [value, selected?.ref.name]);
-
-  useEffect(() => {
-    if (expanded && activeIndex >= 0) list.current?.children[activeIndex]?.scrollIntoView({ block: "nearest" });
-  }, [expanded, activeIndex, query]);
-
-  function choose(item: DiceActor) {
-    onChange(item.key);
-    setQuery(item.ref.name);
-    setOpen(false);
-    setActiveIndex(-1);
-  }
-
-  function dismiss() {
-    setOpen(false);
-    setActiveIndex(-1);
-    setQuery(selected?.ref.name ?? "");
-  }
-
-  return <div className="sf-dice-actor-search" onBlur={(event) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dismiss();
-  }}>
-    <label htmlFor={inputId}>{label}</label>
-    <div className="sf-dice-combobox">
-      <input id={inputId} ref={input} type="search" role="combobox" value={query} disabled={disabled}
-        aria-autocomplete="list" aria-haspopup="listbox" aria-expanded={expanded}
-        aria-controls={expanded ? listId : undefined}
-        aria-activedescendant={expanded && matches[activeIndex] ? `${listId}-${activeIndex}` : undefined}
-        placeholder={`${searchLabel} by name`} autoComplete="off" spellCheck={false}
-        onFocus={() => setOpen(true)}
-        onChange={(event) => { setQuery(event.target.value); setOpen(true); setActiveIndex(-1); }}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-            event.preventDefault();
-            setOpen(true);
-            const direction = event.key === "ArrowDown" ? 1 : -1;
-            setActiveIndex((old) => !matches.length ? -1 : old < 0
-              ? (direction === 1 ? 0 : matches.length - 1)
-              : (old + direction + matches.length) % matches.length);
-          } else if (event.key === "Enter" && expanded && matches[activeIndex]) {
-            event.preventDefault();
-            choose(matches[activeIndex]);
-          } else if (event.key === "Escape" && expanded) {
-            event.preventDefault();
-            event.stopPropagation();
-            dismiss();
-          }
-        }} />
-      {expanded && <div className="sf-dice-suggestions">
-        <ul id={listId} ref={list} role="listbox" aria-label={`${label} matches`}>
-          {matches.map((item, index) => <li id={`${listId}-${index}`} key={item.key} role="option"
-            aria-selected={index === activeIndex} className={index === activeIndex ? "sf-dice-option-active" : undefined}
-            onMouseDown={(event) => event.preventDefault()} onClick={() => choose(item)}>
-            {describe(item)}
-          </li>)}
-        </ul>
-        {!matches.length && <p role="status">No matching names. Try fewer letters.</p>}
-      </div>}
-    </div>
-    <div className="sf-dice-selection">
-      <span className="sf-dice-muted">{value ? selected ? `Selected: ${describe(selected)}` : "Selection unavailable" : emptyLabel}</span>
-      {value && <button className="btn btn-secondary btn-sm" type="button" disabled={disabled}
-        aria-label={`Clear ${label} selection`} onMouseDown={(event) => event.preventDefault()}
-        onClick={() => { onChange(""); setQuery(""); setActiveIndex(-1); setOpen(true); input.current?.focus(); }}>Clear</button>}
-    </div>
-  </div>;
-}
 
 function Breakdown({ roll }: { roll: RollResult }) {
   const request = roll.request;
@@ -225,17 +130,20 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
         <label>Purpose<select value={purpose} onChange={(event) => changePurpose(event.target.value as RollPurpose)}>
           {PURPOSES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
         </select></label>
-        <ActorSearch label="Roll as" searchLabel="Search roller" emptyLabel="No character selected"
-          actors={archive.actors} value={actorKey} disabled={!worldId} onChange={(value) => {
-            setActorKey(value); if (purpose !== "save") setSourceId("");
-            if (purpose !== "save" || !save) setStatKey("none");
-          }} />
-        <ActorSearch label={purpose === "save" ? "Saving throw caused by" : "Target (optional)"}
-          searchLabel={purpose === "save" ? "Search effect source" : "Search target"} emptyLabel="None"
-          actors={archive.actors} value={opponentKey} disabled={!worldId} onChange={(value) => {
-            setOpponentKey(value);
-            if (purpose === "save") { setSourceId(""); setStatKey("none"); setDC(""); }
-          }} />
+        <label>Roll as<select value={actorKey} disabled={!worldId} onChange={(event) => {
+          setActorKey(event.target.value); if (purpose !== "save") setSourceId("");
+          if (purpose !== "save" || !save) setStatKey("none");
+        }}>
+          <option value="">No character selected</option>
+          {archive.actors.map((item) => <option key={item.key} value={item.key}>{item.ref.name} · {item.ref.kind === "monster" ? "Monster template" : title(item.ref.kind)}</option>)}
+        </select></label>
+        <label>{purpose === "save" ? "Saving throw caused by" : "Target (optional)"}<select value={opponentKey} disabled={!worldId} onChange={(event) => {
+          setOpponentKey(event.target.value);
+          if (purpose === "save") { setSourceId(""); setStatKey("none"); setDC(""); }
+        }}>
+          <option value="">None</option>
+          {archive.actors.map((item) => <option key={item.key} value={item.key}>{item.ref.name} · {item.ref.kind === "monster" ? "Monster template" : title(item.ref.kind)}</option>)}
+        </select></label>
         <label>Stat<select value={statKey} onChange={(event) => setStatKey(event.target.value as StatKey | "none")}>
           <option value="none">None — no stat bonus</option>
           {STAT_KEYS.map((key) => <option key={key} value={key}>{title(key)}</option>)}

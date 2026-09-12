@@ -7,10 +7,7 @@
   "assets": {
     "directory": "./dist/client"
   },
-  "ai": {
-    "binding": "AI"
-  },
-  "d1_databases": [
+    "d1_databases": [
     {
       "binding": "DB",
       "database_name": "storyforge-db",
@@ -47,3 +44,4 @@
     "enabled": true
   }
 }
+

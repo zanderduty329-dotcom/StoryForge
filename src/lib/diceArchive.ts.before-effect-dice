@@ -46,83 +46,23 @@ export function readActors(worldId?: string, storage: Pick<Storage, "getItem"> =
       for (const item of list(isMonster ? row.attacks : row.inventory)) {
         const itemId = text(item.id);
         if (!itemId) continue;
-
-        const name = text(
-          item.name,
-          isMonster ? "Unnamed attack" : "Unnamed item"
-        );
-
+        const name = text(item.name, isMonster ? "Unnamed attack" : "Unnamed item");
         const formula = text(item.damage);
-
-        const source: RollSource = {
-          owner: ref,
-          kind: isMonster ? "monster-attack" : "inventory-item",
-          id: itemId,
-          name,
-          savedFormula: formula,
-          damageType: text(item.damageType),
-        };
-
-        if (isMonster || formula) {
-          actor.actions.push({
-            id: itemId,
-            name,
-            formula,
-            bonus: isMonster ? finite(item.attackModifier) : 0,
-            source,
-          });
-        }
-
-        for (const effect of list(item.effects)) {
+        const source: RollSource = { owner: ref, kind: isMonster ? "monster-attack" : "inventory-item", id: itemId, name, savedFormula: formula, damageType: text(item.damageType) };
+        if (isMonster || formula) actor.actions.push({ id: itemId, name, formula, bonus: isMonster ? finite(item.attackModifier) : 0, source });
+        if (isMonster) for (const effect of list(item.effects)) {
           const effectId = text(effect.id);
-          if (!effectId) continue;
-
-          const effectName = text(effect.name, "Effect");
-          const effectFormula = text(effect.damage);
-
-          const effectSource: RollSource = {
-            owner: ref,
-            kind: isMonster ? "monster-effect" : "item-effect",
-            id: effectId,
-            name: effectName,
-            attackId: itemId,
-            attackName: name,
-            savedFormula: effectFormula,
-            damageType: text(effect.damageType),
-            condition: text(effect.condition),
-          };
-
-          if (effectFormula) {
-            actor.actions.push({
-              id: `${itemId}:${effectId}`,
-              name: `${name} — ${effectName}`,
-              formula: effectFormula,
-              bonus: 0,
-              source: effectSource,
-            });
-          }
-
           const stat = text(effect.saveStat).toLowerCase() as StatKey;
-
-          if (STAT_KEYS.includes(stat)) {
-            const rawDC = finite(effect.saveDC);
-            const dc =
-              Number.isSafeInteger(rawDC) && rawDC > 0
-                ? rawDC
-                : undefined;
-
-            actor.saves.push({
-              id: `${itemId}:${effectId}`,
-              name: `${name} — ${effectName}`,
-              stat,
-              dc,
-              source: {
-                ...effectSource,
-                savedStat: stat,
-                savedDC: dc,
-              },
-            });
-          }
+          if (!effectId || !STAT_KEYS.includes(stat)) continue;
+          const rawDC = finite(effect.saveDC);
+          const dc = Number.isSafeInteger(rawDC) && rawDC > 0 ? rawDC : undefined;
+          const effectName = text(effect.name, "Effect");
+          actor.saves.push({
+            id: `${itemId}:${effectId}`,
+            name: `${name} — ${effectName}`,
+            stat, dc,
+            source: { owner: ref, kind: "monster-effect", id: effectId, name: effectName, attackId: itemId, attackName: name, savedStat: stat, savedDC: dc, savedFormula: text(effect.damage), damageType: text(effect.damageType), condition: text(effect.condition) },
+          });
         }
       }
       actors.push(actor);

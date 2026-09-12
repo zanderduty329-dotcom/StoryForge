@@ -25,16 +25,3 @@
 .sf-dice-dialog-header h3 { margin: 0; }
 .sf-dice-dialog-header button { min-height: 44px; }
 @media (max-width: 560px) { .sf-dice-fields { grid-template-columns: 1fr; } .sf-dice-context, .sf-dice-result { padding: 12px; } .sf-dice-dialog { padding: 12px; } .sf-dice input, .sf-dice select { font-size: 16px; } }
-
-/* StoryForge dice actor search v2 */
-.sf-dice-actor-search { min-width: 0; }
-.sf-dice-combobox { position: relative; }
-.sf-dice-suggestions { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40; max-height: 240px; overflow-y: auto; border: 1px solid var(--border, GrayText); border-radius: 8px; background: var(--bg-secondary, Canvas); color: var(--text-primary, CanvasText); box-shadow: 0 6px 18px rgb(0 0 0 / 20%); }
-.sf-dice-suggestions ul { list-style: none; margin: 0; padding: 4px; }
-.sf-dice-suggestions li { min-height: 44px; display: flex; align-items: center; padding: 10px; border: 2px solid transparent; border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
-.sf-dice-suggestions li:hover, .sf-dice-suggestions .sf-dice-option-active { border-color: var(--accent, Highlight); background: var(--bg-primary, Canvas); }
-.sf-dice-suggestions p { margin: 0; padding: 12px; }
-.sf-dice-selection { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
-.sf-dice-selection .sf-dice-muted { margin: 0; overflow-wrap: anywhere; }
-.sf-dice-selection button { flex-shrink: 0; min-height: 44px; }
-.sf-dice-selection button:focus-visible { outline: 2px solid var(--accent, Highlight); outline-offset: 2px; }
