@@ -597,62 +597,25 @@ button {
   color: inherit;
   text-align: center;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  width: max-content;
-  height: max-content;
 }
 
 .sf-map-marker-icon-v2 {
-  display: none;
-}
-
-.sf-map-marker-symbol-v3 {
   display: block;
-  flex: 0 0 auto;
-  line-height: 0;
+  font-size: clamp(20px, 2.6vw, 32px);
+  line-height: 1;
   filter:
-    drop-shadow(0 1px 1px rgb(0 0 0 / 28%));
-}
-
-.sf-map-marker-symbol-v3 svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.sf-map-marker-size-tiny-v3 {
-  width: 13px;
-  height: 13px;
-}
-
-.sf-map-marker-size-small-v3 {
-  width: 19px;
-  height: 19px;
-}
-
-.sf-map-marker-size-medium-v3 {
-  width: 28px;
-  height: 28px;
-}
-
-.sf-map-marker-size-large-v3 {
-  width: 40px;
-  height: 40px;
+    drop-shadow(0 1px 2px rgb(0 0 0 / 45%));
 }
 
 .sf-map-marker-label-v2 {
   display: block;
-  margin-bottom: 1px;
-  padding: 1px 3px;
+  margin-top: 3px;
+  padding: 2px 5px;
   border-radius: 5px;
   background: rgb(255 255 255 / 76%);
   color: #111827;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: bold;
-  line-height: 1.1;
   white-space: nowrap;
 }
 
@@ -753,158 +716,3 @@ button {
   opacity: 0.96;
 }
 
-
-
-/* StoryForge Terrain Identity v1 */
-
-.sf-map-terrain-style-v1 {
-  min-width: 185px;
-}
-
-.sf-map-terrain-symbol-v1 {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  font-family:
-    Georgia,
-    "Times New Roman",
-    serif;
-  font-size: clamp(7px, 1.15vw, 19px);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -1px;
-  opacity: 0.75;
-  white-space: nowrap;
-  pointer-events: none;
-  user-select: none;
-}
-
-
-
-/* StoryForge Region Foundation v1 */
-
-.sf-map-region-name-v1 {
-  width: 150px;
-  padding: 5px 7px;
-  border: 1px solid #4b5563;
-  border-radius: 6px;
-  background: #111827;
-  color: white;
-}
-
-.sf-map-area-hint-v1 {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  padding: 0 8px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.sf-map-area-preview-v1 {
-  position: absolute;
-  z-index: 35;
-  border: 2px dashed rgb(255 255 255 / 85%);
-  background: rgb(255 255 255 / 10%);
-  pointer-events: none;
-}
-
-.sf-map-region-cell-v1 {
-  position: absolute;
-  z-index: 8;
-  pointer-events: none;
-}
-
-.sf-map-region-biome-v1 {
-  opacity: 0.82;
-}
-
-.sf-map-region-feature-v1 {
-  z-index: 10;
-  opacity: 0.82;
-}
-
-.sf-map-region-political-v1 {
-  z-index: 12;
-  opacity: 0.15;
-  outline: 1px solid rgb(255 255 255 / 12%);
-}
-
-
-
-/* -----------------------------------------------
-   Map Location searchable picker
-   ----------------------------------------------- */
-
-.sf-map-location-picker-wrap-v3 {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-.sf-map-location-picker-v3 {
-  position: absolute;
-  z-index: 100;
-  top: calc(100% + 7px);
-  right: 0;
-  width: min(280px, calc(100vw - 32px));
-  padding: 8px;
-  border: 1px solid rgb(148 163 184 / 32%);
-  border-radius: 10px;
-  background: rgb(15 23 42 / 97%);
-  box-shadow:
-    0 12px 30px rgb(0 0 0 / 38%);
-}
-
-.sf-map-location-search-v3 {
-  width: 100%;
-}
-
-.sf-map-location-results-v3 {
-  display: grid;
-  gap: 4px;
-  max-height: 260px;
-  margin-top: 7px;
-  overflow-y: auto;
-}
-
-.sf-map-location-option-v3 {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.sf-map-location-option-v3:hover,
-.sf-map-location-option-v3:focus-visible {
-  background: rgb(148 163 184 / 16%);
-  outline: none;
-}
-
-.sf-map-location-option-v3 strong {
-  font-size: 13px;
-}
-
-.sf-map-location-option-v3 span {
-  color: rgb(148 163 184);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.sf-map-location-empty-v3 {
-  padding: 12px 8px;
-  color: rgb(148 163 184);
-  font-size: 12px;
-  text-align: center;
-}

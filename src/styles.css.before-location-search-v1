@@ -600,9 +600,7 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  width: max-content;
-  height: max-content;
+  gap: 2px;
 }
 
 .sf-map-marker-icon-v2 {
@@ -645,8 +643,8 @@ button {
 
 .sf-map-marker-label-v2 {
   display: block;
-  margin-bottom: 1px;
-  padding: 1px 3px;
+  margin-bottom: 2px;
+  padding: 2px 5px;
   border-radius: 5px;
   background: rgb(255 255 255 / 76%);
   color: #111827;
@@ -833,78 +831,3 @@ button {
   outline: 1px solid rgb(255 255 255 / 12%);
 }
 
-
-
-/* -----------------------------------------------
-   Map Location searchable picker
-   ----------------------------------------------- */
-
-.sf-map-location-picker-wrap-v3 {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-.sf-map-location-picker-v3 {
-  position: absolute;
-  z-index: 100;
-  top: calc(100% + 7px);
-  right: 0;
-  width: min(280px, calc(100vw - 32px));
-  padding: 8px;
-  border: 1px solid rgb(148 163 184 / 32%);
-  border-radius: 10px;
-  background: rgb(15 23 42 / 97%);
-  box-shadow:
-    0 12px 30px rgb(0 0 0 / 38%);
-}
-
-.sf-map-location-search-v3 {
-  width: 100%;
-}
-
-.sf-map-location-results-v3 {
-  display: grid;
-  gap: 4px;
-  max-height: 260px;
-  margin-top: 7px;
-  overflow-y: auto;
-}
-
-.sf-map-location-option-v3 {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.sf-map-location-option-v3:hover,
-.sf-map-location-option-v3:focus-visible {
-  background: rgb(148 163 184 / 16%);
-  outline: none;
-}
-
-.sf-map-location-option-v3 strong {
-  font-size: 13px;
-}
-
-.sf-map-location-option-v3 span {
-  color: rgb(148 163 184);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.sf-map-location-empty-v3 {
-  padding: 12px 8px;
-  color: rgb(148 163 184);
-  font-size: 12px;
-  text-align: center;
-}

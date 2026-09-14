@@ -1,0 +1,980 @@
+import { useEffect, useMemo, useState } from "react";
+
+type MapType = "world" | "region" | "city" | "dungeon";
+type MapStyle = "old-timey" | "modern" | "sci-fi" | "custom";
+
+type MapColors = {
+  water: string;
+  land: string;
+  forest: string;
+  desert: string;
+  mountain: string;
+  plains: string;
+  label: string;
+  accent: string;
+};
+
+type TerrainType =
+  | "land"
+  | "water"
+  | "forest"
+  | "mountain"
+  | "desert"
+  | "plains"
+  | "swamp"
+  | "snow";
+
+type TerrainStamp = {
+  id: string;
+  type: TerrainType;
+  x: number;
+  y: number;
+  size: number;
+};
+
+type LocationType =
+  | "city"
+  | "town"
+  | "village"
+  | "port"
+  | "cave"
+  | "dungeon"
+  | "ruins"
+  | "castle"
+  | "forest"
+  | "mountain"
+  | "landmark"
+  | "custom";
+
+type MapLocation = {
+  id: string;
+  name: string;
+  type: LocationType;
+  icon: string;
+  x: number;
+  y: number;
+  description?: string;
+};
+
+type StoryMap = {
+  id: string;
+  name: string;
+  type: MapType;
+  style: MapStyle;
+  colors: MapColors;
+  terrain: TerrainStamp[];
+  locations: MapLocation[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+const STYLE_PRESETS: Record<Exclude<MapStyle, "custom">, MapColors> = {
+  "old-timey": {
+    water: "#8ea4a8",
+    land: "#c6ad79",
+    forest: "#556b3f",
+    desert: "#d0b46f",
+    mountain: "#776957",
+    plains: "#9ca86d",
+    label: "#2f2418",
+    accent: "#6b3f23",
+  },
+  modern: {
+    water: "#4f9bd9",
+    land: "#d8d8d0",
+    forest: "#4d8b55",
+    desert: "#d9bd77",
+    mountain: "#777c82",
+    plains: "#9bbf73",
+    label: "#18202a",
+    accent: "#c2413a",
+  },
+  "sci-fi": {
+    water: "#16324d",
+    land: "#313b4f",
+    forest: "#316d63",
+    desert: "#806846",
+    mountain: "#62677b",
+    plains: "#45576b",
+    label: "#d9f4ff",
+    accent: "#5ee7ff",
+  },
+};
+
+const LOCATION_ICONS: Record<LocationType, string> = {
+  city: "🏰",
+  town: "🏘️",
+  village: "🏡",
+  port: "⚓",
+  cave: "🕳️",
+  dungeon: "🗝️",
+  ruins: "🏚️",
+  castle: "🏯",
+  forest: "🌲",
+  mountain: "⛰️",
+  landmark: "📍",
+  custom: "✦",
+};
+
+const TERRAIN_LABELS: Record<TerrainType, string> = {
+  land: "Land",
+  water: "Water / Lake",
+  forest: "Forest",
+  mountain: "Mountain",
+  desert: "Desert",
+  plains: "Plains",
+  swamp: "Swamp",
+  snow: "Snow",
+};
+
+const TERRAIN_SYMBOLS: Partial<Record<TerrainType, string>> = {
+  forest: "🌲",
+  mountain: "⛰️",
+  swamp: "🌿",
+  snow: "❄️",
+};
+
+const MAP_TYPES: MapType[] = ["world", "region", "city", "dungeon"];
+const MAP_STYLES: MapStyle[] = ["old-timey", "modern", "sci-fi", "custom"];
+
+function title(value: string) {
+  return value
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function terrainColor(type: TerrainType, colors: MapColors) {
+  switch (type) {
+    case "land":
+      return colors.land;
+    case "water":
+      return colors.water;
+    case "forest":
+      return colors.forest;
+    case "mountain":
+      return colors.mountain;
+    case "desert":
+      return colors.desert;
+    case "plains":
+      return colors.plains;
+    case "swamp":
+      return "#526d58";
+    case "snow":
+      return "#e7edf0";
+  }
+}
+
+export function MapPage({ worldId }: { worldId: string }) {
+  const storageKey = `storyforge-maps-${worldId}`;
+
+  const [maps, setMaps] = useState<StoryMap[]>([]);
+  const [loadedWorldId, setLoadedWorldId] = useState("");
+  const [selectedMapId, setSelectedMapId] = useState("");
+
+  const [newMapName, setNewMapName] = useState("");
+  const [newMapType, setNewMapType] = useState<MapType>("world");
+
+  const [terrainType, setTerrainType] = useState<TerrainType>("land");
+  const [terrainSize, setTerrainSize] = useState(14);
+  const [terrainMode, setTerrainMode] = useState(false);
+
+  const [locationEditor, setLocationEditor] = useState<{
+    location: MapLocation;
+    isNew: boolean;
+  } | null>(null);
+
+  const [placingLocation, setPlacingLocation] = useState(false);
+  const [movingLocationId, setMovingLocationId] = useState("");
+
+  const activeMap = useMemo(
+    () => maps.find((map) => map.id === selectedMapId) ?? null,
+    [maps, selectedMapId]
+  );
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+
+      if (Array.isArray(parsed)) {
+        const loaded = parsed as StoryMap[];
+        setMaps(loaded);
+        setSelectedMapId(loaded[0]?.id ?? "");
+      } else {
+        setMaps([]);
+        setSelectedMapId("");
+      }
+    } catch {
+      setMaps([]);
+      setSelectedMapId("");
+    }
+
+    setLoadedWorldId(worldId);
+    setLocationEditor(null);
+    setTerrainMode(false);
+    setPlacingLocation(false);
+    setMovingLocationId("");
+  }, [storageKey, worldId]);
+
+  useEffect(() => {
+    if (loadedWorldId !== worldId) return;
+    localStorage.setItem(storageKey, JSON.stringify(maps));
+  }, [maps, loadedWorldId, storageKey, worldId]);
+
+  const updateMap = (
+    mapId: string,
+    update: Partial<StoryMap> | ((map: StoryMap) => StoryMap)
+  ) => {
+    setMaps((old) =>
+      old.map((map) => {
+        if (map.id !== mapId) return map;
+
+        const next =
+          typeof update === "function"
+            ? update(map)
+            : { ...map, ...update };
+
+        return {
+          ...next,
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
+  };
+
+  const createMap = () => {
+    const trimmedName = newMapName.trim();
+    if (!trimmedName) return;
+
+    const now = new Date().toISOString();
+
+    const map: StoryMap = {
+      id: crypto.randomUUID(),
+      name: trimmedName,
+      type: newMapType,
+      style: "old-timey",
+      colors: { ...STYLE_PRESETS["old-timey"] },
+      terrain: [],
+      locations: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setMaps((old) => [...old, map]);
+    setSelectedMapId(map.id);
+    setNewMapName("");
+    setLocationEditor(null);
+    setTerrainMode(false);
+  };
+
+  const deleteMap = () => {
+    if (!activeMap) return;
+
+    const next = maps.filter((map) => map.id !== activeMap.id);
+    setMaps(next);
+    setSelectedMapId(next[0]?.id ?? "");
+    setLocationEditor(null);
+    setTerrainMode(false);
+  };
+
+  const changeStyle = (style: MapStyle) => {
+    if (!activeMap) return;
+
+    if (style === "custom") {
+      updateMap(activeMap.id, { style });
+      return;
+    }
+
+    updateMap(activeMap.id, {
+      style,
+      colors: { ...STYLE_PRESETS[style] },
+    });
+  };
+
+  const updateColor = (key: keyof MapColors, value: string) => {
+    if (!activeMap) return;
+
+    updateMap(activeMap.id, {
+      style: "custom",
+      colors: {
+        ...activeMap.colors,
+        [key]: value,
+      },
+    });
+  };
+
+  const addLocation = () => {
+    setTerrainMode(false);
+    setMovingLocationId("");
+    setPlacingLocation(false);
+
+    setLocationEditor({
+      isNew: true,
+      location: {
+        id: crypto.randomUUID(),
+        name: "",
+        type: "city",
+        icon: LOCATION_ICONS.city,
+        x: 50,
+        y: 50,
+        description: "",
+      },
+    });
+  };
+
+  const saveLocationAt = (x: number, y: number) => {
+    if (!activeMap || !locationEditor) return;
+
+    const cleanLocation: MapLocation = {
+      ...locationEditor.location,
+      name: locationEditor.location.name.trim() || "Unnamed Location",
+      description: locationEditor.location.description?.trim() || "",
+      x,
+      y,
+    };
+
+    updateMap(activeMap.id, (map) => ({
+      ...map,
+      locations: locationEditor.isNew
+        ? [...map.locations, cleanLocation]
+        : map.locations.map((location) =>
+            location.id === cleanLocation.id
+              ? cleanLocation
+              : location
+          ),
+    }));
+
+    setLocationEditor(null);
+    setPlacingLocation(false);
+  };
+
+  const saveLocationWithoutMoving = () => {
+    if (!activeMap || !locationEditor) return;
+
+    saveLocationAt(
+      locationEditor.location.x,
+      locationEditor.location.y
+    );
+  };
+
+  const removeLocation = () => {
+    if (!activeMap || !locationEditor || locationEditor.isNew) return;
+
+    updateMap(activeMap.id, (map) => ({
+      ...map,
+      locations: map.locations.filter(
+        (location) => location.id !== locationEditor.location.id
+      ),
+    }));
+
+    setLocationEditor(null);
+  };
+
+  const handleCanvasClick = (
+    event: React.MouseEvent<HTMLDivElement>
+  ) => {
+    if (!activeMap) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.max(
+      0,
+      Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)
+    );
+    const y = Math.max(
+      0,
+      Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)
+    );
+
+    if (placingLocation && locationEditor) {
+      saveLocationAt(x, y);
+      return;
+    }
+
+    if (movingLocationId) {
+      updateMap(activeMap.id, (map) => ({
+        ...map,
+        locations: map.locations.map((location) =>
+          location.id === movingLocationId
+            ? { ...location, x, y }
+            : location
+        ),
+      }));
+
+      setMovingLocationId("");
+      return;
+    }
+
+    if (terrainMode) {
+      const stamp: TerrainStamp = {
+        id: crypto.randomUUID(),
+        type: terrainType,
+        x,
+        y,
+        size: terrainSize,
+      };
+
+      updateMap(activeMap.id, (map) => ({
+        ...map,
+        terrain: [...map.terrain, stamp],
+      }));
+    }
+  };
+
+  const undoTerrain = () => {
+    if (!activeMap || activeMap.terrain.length === 0) return;
+
+    updateMap(activeMap.id, (map) => ({
+      ...map,
+      terrain: map.terrain.slice(0, -1),
+    }));
+  };
+
+  const clearTerrain = () => {
+    if (!activeMap) return;
+    updateMap(activeMap.id, { terrain: [] });
+  };
+
+  return (
+    <div className="sf-map-builder">
+      <div className="sf-map-sidebar">
+        <div className="card sf-map-panel">
+          <h3>Create Map</h3>
+
+          <label>
+            Map Name
+            <input
+              className="form-input"
+              value={newMapName}
+              onChange={(event) => setNewMapName(event.target.value)}
+              placeholder="Example: The Western Realms"
+            />
+          </label>
+
+          <label>
+            Map Type
+            <select
+              className="form-input"
+              value={newMapType}
+              onChange={(event) =>
+                setNewMapType(event.target.value as MapType)
+              }
+            >
+              {MAP_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {title(type)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={createMap}
+            disabled={!newMapName.trim()}
+          >
+            + Create Map
+          </button>
+        </div>
+
+        {maps.length > 0 && (
+          <div className="card sf-map-panel">
+            <h3>Saved Maps</h3>
+
+            <div className="sf-map-list">
+              {maps.map((map) => (
+                <button
+                  key={map.id}
+                  type="button"
+                  className={
+                    map.id === selectedMapId
+                      ? "btn btn-primary"
+                      : "btn btn-secondary"
+                  }
+                  onClick={() => {
+                    setSelectedMapId(map.id);
+                    setLocationEditor(null);
+                    setTerrainMode(false);
+                    setMovingLocationId("");
+                  }}
+                >
+                  {map.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeMap && (
+          <>
+            <div className="card sf-map-panel">
+              <h3>Map Setup</h3>
+
+              <label>
+                Name
+                <input
+                  className="form-input"
+                  value={activeMap.name}
+                  onChange={(event) =>
+                    updateMap(activeMap.id, {
+                      name: event.target.value,
+                    })
+                  }
+                />
+              </label>
+
+              <label>
+                Type
+                <select
+                  className="form-input"
+                  value={activeMap.type}
+                  onChange={(event) =>
+                    updateMap(activeMap.id, {
+                      type: event.target.value as MapType,
+                    })
+                  }
+                >
+                  {MAP_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {title(type)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Style
+                <select
+                  className="form-input"
+                  value={activeMap.style}
+                  onChange={(event) =>
+                    changeStyle(event.target.value as MapStyle)
+                  }
+                >
+                  {MAP_STYLES.map((style) => (
+                    <option key={style} value={style}>
+                      {title(style)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="sf-map-colors">
+                {(
+                  Object.keys(activeMap.colors) as Array<
+                    keyof MapColors
+                  >
+                ).map((key) => (
+                  <label key={key}>
+                    {title(key)}
+                    <input
+                      type="color"
+                      value={activeMap.colors[key]}
+                      onChange={(event) =>
+                        updateColor(key, event.target.value)
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={deleteMap}
+              >
+                Delete Map
+              </button>
+            </div>
+
+            <div className="card sf-map-panel">
+              <h3>Terrain</h3>
+
+              <label>
+                Terrain Type
+                <select
+                  className="form-input"
+                  value={terrainType}
+                  onChange={(event) =>
+                    setTerrainType(event.target.value as TerrainType)
+                  }
+                >
+                  {(
+                    Object.keys(TERRAIN_LABELS) as TerrainType[]
+                  ).map((type) => (
+                    <option key={type} value={type}>
+                      {TERRAIN_LABELS[type]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Brush Size
+                <select
+                  className="form-input"
+                  value={terrainSize}
+                  onChange={(event) =>
+                    setTerrainSize(Number(event.target.value))
+                  }
+                >
+                  <option value={8}>Small</option>
+                  <option value={14}>Medium</option>
+                  <option value={22}>Large</option>
+                  <option value={32}>Very Large</option>
+                </select>
+              </label>
+
+              <button
+                type="button"
+                className={
+                  terrainMode
+                    ? "btn btn-primary"
+                    : "btn btn-secondary"
+                }
+                onClick={() => {
+                  setTerrainMode((old) => !old);
+                  setPlacingLocation(false);
+                  setMovingLocationId("");
+                }}
+              >
+                {terrainMode
+                  ? "✓ Painting Terrain"
+                  : "Paint Terrain"}
+              </button>
+
+              <div className="sf-map-button-row">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={undoTerrain}
+                  disabled={activeMap.terrain.length === 0}
+                >
+                  Undo
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={clearTerrain}
+                  disabled={activeMap.terrain.length === 0}
+                >
+                  Clear Terrain
+                </button>
+              </div>
+
+              {terrainMode && (
+                <p className="sf-map-help">
+                  Click the map to place terrain. Keep clicking to build
+                  larger landmasses and regions.
+                </p>
+              )}
+            </div>
+
+            <div className="card sf-map-panel">
+              <h3>Locations</h3>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={addLocation}
+              >
+                + Add Location
+              </button>
+
+              {activeMap.locations.length > 0 && (
+                <div className="sf-map-location-list">
+                  {activeMap.locations.map((location) => (
+                    <button
+                      key={location.id}
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setTerrainMode(false);
+                        setMovingLocationId("");
+                        setLocationEditor({
+                          isNew: false,
+                          location: { ...location },
+                        });
+                      }}
+                    >
+                      {location.icon} {location.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="sf-map-main">
+        {!activeMap ? (
+          <div className="empty-state">
+            <div className="empty-icon">🧭</div>
+            <h3>Create your first map</h3>
+            <p>
+              Build it yourself with terrain, colors, locations, labels,
+              and icons.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="sf-map-heading">
+              <div>
+                <h2>{activeMap.name}</h2>
+                <p>
+                  {title(activeMap.type)} · {title(activeMap.style)}
+                </p>
+              </div>
+
+              {(placingLocation || movingLocationId) && (
+                <div className="sf-map-placement-notice">
+                  Click anywhere on the map to place the location.
+                </div>
+              )}
+            </div>
+
+            <div
+              className={`sf-map-canvas ${
+                terrainMode ? "sf-map-canvas-painting" : ""
+              }`}
+              style={{
+                backgroundColor: activeMap.colors.water,
+                color: activeMap.colors.label,
+                borderColor: activeMap.colors.accent,
+              }}
+              onClick={handleCanvasClick}
+            >
+              {activeMap.terrain.map((stamp) => {
+                const symbol = TERRAIN_SYMBOLS[stamp.type];
+
+                return (
+                  <div
+                    key={stamp.id}
+                    className={`sf-map-terrain sf-map-terrain-${stamp.type}`}
+                    style={{
+                      left: `${stamp.x}%`,
+                      top: `${stamp.y}%`,
+                      width: `${stamp.size}%`,
+                      aspectRatio: "1.35 / 1",
+                      backgroundColor: terrainColor(
+                        stamp.type,
+                        activeMap.colors
+                      ),
+                    }}
+                  >
+                    {symbol && (
+                      <span className="sf-map-terrain-symbol">
+                        {symbol}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+
+              {activeMap.locations.map((location) => (
+                <button
+                  key={location.id}
+                  type="button"
+                  className="sf-map-marker"
+                  style={{
+                    left: `${location.x}%`,
+                    top: `${location.y}%`,
+                    color: activeMap.colors.label,
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setTerrainMode(false);
+                    setMovingLocationId("");
+                    setLocationEditor({
+                      isNew: false,
+                      location: { ...location },
+                    });
+                  }}
+                  title={location.description || location.name}
+                >
+                  <span className="sf-map-marker-icon">
+                    {location.icon}
+                  </span>
+                  <span className="sf-map-marker-label">
+                    {location.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <p className="sf-map-help">
+              Terrain and locations save automatically to this world.
+            </p>
+
+            {locationEditor && (
+              <div className="card sf-map-location-editor">
+                <h3>
+                  {locationEditor.isNew
+                    ? "Add Location"
+                    : "Edit Location"}
+                </h3>
+
+                <div className="sf-map-editor-grid">
+                  <label>
+                    Name
+                    <input
+                      className="form-input"
+                      value={locationEditor.location.name}
+                      onChange={(event) =>
+                        setLocationEditor({
+                          ...locationEditor,
+                          location: {
+                            ...locationEditor.location,
+                            name: event.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Example: Kingsgaurd"
+                    />
+                  </label>
+
+                  <label>
+                    Type
+                    <select
+                      className="form-input"
+                      value={locationEditor.location.type}
+                      onChange={(event) => {
+                        const type = event.target.value as LocationType;
+
+                        setLocationEditor({
+                          ...locationEditor,
+                          location: {
+                            ...locationEditor.location,
+                            type,
+                            icon: LOCATION_ICONS[type],
+                          },
+                        });
+                      }}
+                    >
+                      {(
+                        Object.keys(LOCATION_ICONS) as LocationType[]
+                      ).map((type) => (
+                        <option key={type} value={type}>
+                          {title(type)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Icon
+                    <input
+                      className="form-input"
+                      value={locationEditor.location.icon}
+                      onChange={(event) =>
+                        setLocationEditor({
+                          ...locationEditor,
+                          location: {
+                            ...locationEditor.location,
+                            icon: event.target.value,
+                          },
+                        })
+                      }
+                      maxLength={8}
+                    />
+                  </label>
+                </div>
+
+                <label>
+                  Description
+                  <textarea
+                    className="form-input sf-map-textarea"
+                    value={locationEditor.location.description ?? ""}
+                    onChange={(event) =>
+                      setLocationEditor({
+                        ...locationEditor,
+                        location: {
+                          ...locationEditor.location,
+                          description: event.target.value,
+                        },
+                      })
+                    }
+                    placeholder="What is this place known for?"
+                  />
+                </label>
+
+                <div className="sf-map-editor-actions">
+                  {!locationEditor.isNew && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={removeLocation}
+                      >
+                        Delete
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setMovingLocationId(
+                            locationEditor.location.id
+                          );
+                          setLocationEditor(null);
+                          setTerrainMode(false);
+                        }}
+                      >
+                        Move on Map
+                      </button>
+                    </>
+                  )}
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setLocationEditor(null);
+                      setPlacingLocation(false);
+                    }}
+                  >
+                    Cancel
+                  </button>
+
+                  {locationEditor.isNew ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        if (!locationEditor.location.name.trim()) return;
+                        setPlacingLocation(true);
+                        setTerrainMode(false);
+                      }}
+                      disabled={
+                        !locationEditor.location.name.trim()
+                      }
+                    >
+                      Place on Map
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={saveLocationWithoutMoving}
+                    >
+                      Save Location
+                    </button>
+                  )}
+                </div>
+
+                {placingLocation && (
+                  <p className="sf-map-help">
+                    Now click the exact spot on the map where this
+                    location belongs.
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

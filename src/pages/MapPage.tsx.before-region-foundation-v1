@@ -1,0 +1,2200 @@
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import type {
+  PointerEvent as ReactPointerEvent,
+} from "react";
+
+type MapType = "world" | "region" | "city" | "dungeon";
+type MapStyle = "old-timey" | "modern" | "sci-fi" | "custom";
+
+type DrawMode = "freehand" | "grid";
+type BrushShape = "round" | "square" | "speckled";
+type CanvasBase = "water" | "land" | "blank";
+
+type TerrainType =
+  | "land"
+  | "water"
+  | "forest"
+  | "mountain"
+  | "desert"
+  | "plains"
+  | "swamp"
+  | "snow";
+
+type EditorTool =
+  | "select"
+  | TerrainType
+  | "erase"
+  | "location";
+
+type MapColors = {
+  water: string;
+  land: string;
+  forest: string;
+  desert: string;
+  mountain: string;
+  plains: string;
+  label: string;
+  accent: string;
+};
+
+type TerrainStamp = {
+  id: string;
+  type: TerrainType;
+  x: number;
+  y: number;
+  size: number;
+  mode?: DrawMode;
+  shape?: BrushShape;
+  strokeId?: string;
+  terrainStyle?: string;
+};
+
+type LocationType =
+  | "city"
+  | "town"
+  | "village"
+  | "port"
+  | "cave"
+  | "dungeon"
+  | "ruins"
+  | "castle"
+  | "forest"
+  | "mountain"
+  | "landmark"
+  | "custom";
+
+type MapLocation = {
+  id: string;
+  name: string;
+  type: LocationType;
+  icon: string;
+  x: number;
+  y: number;
+  description?: string;
+};
+
+type StoryMap = {
+  id: string;
+  name: string;
+  type: MapType;
+  style: MapStyle;
+  colors: MapColors;
+  base?: CanvasBase;
+  terrain: TerrainStamp[];
+  locations: MapLocation[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+const STYLE_PRESETS: Record<
+  Exclude<MapStyle, "custom">,
+  MapColors
+> = {
+  "old-timey": {
+    water: "#6f9fbd",
+    land: "#c8b27d",
+    forest: "#526b3f",
+    desert: "#d0b46f",
+    mountain: "#756b5c",
+    plains: "#9da96f",
+    label: "#2f2418",
+    accent: "#6b4329",
+  },
+
+  modern: {
+    water: "#4c9bd8",
+    land: "#d8d8cf",
+    forest: "#4c8a55",
+    desert: "#d9bd77",
+    mountain: "#777d84",
+    plains: "#9bbf73",
+    label: "#18202a",
+    accent: "#c2413a",
+  },
+
+  "sci-fi": {
+    water: "#172d46",
+    land: "#343e53",
+    forest: "#316d63",
+    desert: "#806846",
+    mountain: "#62677b",
+    plains: "#45576b",
+    label: "#d9f4ff",
+    accent: "#5ee7ff",
+  },
+};
+
+const LOCATION_ICONS: Record<LocationType, string> = {
+  city: "🏰",
+  town: "🏘️",
+  village: "🏡",
+  port: "⚓",
+  cave: "🕳️",
+  dungeon: "🗝️",
+  ruins: "🏚️",
+  castle: "🏯",
+  forest: "🌲",
+  mountain: "⛰️",
+  landmark: "📍",
+  custom: "✦",
+};
+
+const MAP_TYPES: MapType[] = [
+  "world",
+  "region",
+  "city",
+  "dungeon",
+];
+
+const MAP_STYLES: MapStyle[] = [
+  "old-timey",
+  "modern",
+  "sci-fi",
+  "custom",
+];
+
+const TERRAIN_TOOLS: Array<{
+  key: TerrainType;
+  label: string;
+  icon: string;
+}> = [
+  { key: "land", label: "Land", icon: "🟫" },
+  { key: "water", label: "Water", icon: "🌊" },
+  { key: "forest", label: "Forest", icon: "🌲" },
+  { key: "mountain", label: "Mountain", icon: "⛰️" },
+  { key: "desert", label: "Desert", icon: "🏜️" },
+  { key: "plains", label: "Plains", icon: "🌾" },
+  { key: "swamp", label: "Swamp", icon: "🌿" },
+  { key: "snow", label: "Snow", icon: "❄️" },
+];
+
+const TERRAIN_STYLE_OPTIONS: Record<
+  TerrainType,
+  Array<{
+    value: string;
+    label: string;
+  }>
+> = {
+  land: [
+    { value: "plain", label: "Plain Land" },
+  ],
+
+  water: [
+    { value: "plain", label: "Plain Water" },
+  ],
+
+  forest: [
+    { value: "ink-trees", label: "Ink Trees" },
+    { value: "pine", label: "Pine Trees" },
+    { value: "oak", label: "Oak Trees" },
+    { value: "mixed", label: "Mixed Woodland" },
+  ],
+
+  mountain: [
+    { value: "ink-peaks", label: "Ink Peaks" },
+    { value: "rocky", label: "Rocky Peaks" },
+    { value: "snow-peaks", label: "Snow Peaks" },
+    { value: "range", label: "Mountain Range" },
+  ],
+
+  desert: [
+    { value: "dunes", label: "Dunes" },
+    { value: "sand-marks", label: "Sand Marks" },
+    { value: "barren", label: "Barren" },
+  ],
+
+  plains: [
+    { value: "grass", label: "Grass" },
+    { value: "hatch", label: "Map Hatch" },
+    { value: "sparse", label: "Sparse Plains" },
+  ],
+
+  swamp: [
+    { value: "reeds", label: "Reeds" },
+    { value: "marsh", label: "Marsh" },
+    { value: "dead-trees", label: "Dead Trees" },
+  ],
+
+  snow: [
+    { value: "snowfield", label: "Snowfield" },
+    { value: "ice", label: "Ice" },
+    { value: "snow-peaks", label: "Snow Peaks" },
+  ],
+};
+
+const DEFAULT_TERRAIN_STYLES: Record<
+  TerrainType,
+  string
+> = {
+  land: "plain",
+  water: "plain",
+  forest: "ink-trees",
+  mountain: "ink-peaks",
+  desert: "dunes",
+  plains: "grass",
+  swamp: "reeds",
+  snow: "snowfield",
+};
+
+function isTerrainTool(
+  value: EditorTool
+): value is TerrainType {
+  return TERRAIN_TOOLS.some(
+    (item) => item.key === value
+  );
+}
+
+function terrainSymbol(
+  type: TerrainType,
+  style?: string
+) {
+  const selected =
+    style ?? DEFAULT_TERRAIN_STYLES[type];
+
+  if (type === "forest") {
+    if (selected === "pine") return "▲";
+    if (selected === "oak") return "♣";
+    if (selected === "mixed") return "▲♣";
+    return "♠";
+  }
+
+  if (type === "mountain") {
+    if (selected === "rocky") return "▲";
+    if (selected === "snow-peaks") return "△";
+    if (selected === "range") return "△△";
+    return "⌃";
+  }
+
+  if (type === "desert") {
+    if (selected === "dunes") return "∿";
+    if (selected === "barren") return "·";
+    return "";
+  }
+
+  if (type === "plains") {
+    if (selected === "grass") return "〽";
+    if (selected === "sparse") return "ˎ ˎ";
+    return "";
+  }
+
+  if (type === "swamp") {
+    if (selected === "reeds") return "ǀǀ";
+    if (selected === "dead-trees") return "†";
+    return "";
+  }
+
+  if (type === "snow") {
+    if (selected === "snowfield") return "✦";
+    if (selected === "snow-peaks") return "△";
+    return "";
+  }
+
+  return "";
+}
+
+function terrainTexture(
+  type: TerrainType,
+  style?: string
+) {
+  const selected =
+    style ?? DEFAULT_TERRAIN_STYLES[type];
+
+  if (
+    type === "plains" &&
+    selected === "hatch"
+  ) {
+    return `repeating-linear-gradient(
+      135deg,
+      rgb(40 32 20 / 20%) 0px,
+      rgb(40 32 20 / 20%) 1px,
+      transparent 1px,
+      transparent 7px
+    )`;
+  }
+
+  if (
+    type === "desert" &&
+    selected === "sand-marks"
+  ) {
+    return `radial-gradient(
+      circle,
+      rgb(65 45 20 / 24%) 0 1px,
+      transparent 1.5px
+    )`;
+  }
+
+  if (
+    type === "swamp" &&
+    selected === "marsh"
+  ) {
+    return `repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 6px,
+      rgb(20 45 25 / 25%) 7px,
+      transparent 8px
+    )`;
+  }
+
+  if (
+    type === "snow" &&
+    selected === "ice"
+  ) {
+    return `
+      linear-gradient(
+        45deg,
+        transparent 45%,
+        rgb(80 130 160 / 22%) 46%,
+        rgb(80 130 160 / 22%) 48%,
+        transparent 49%
+      ),
+      linear-gradient(
+        -45deg,
+        transparent 45%,
+        rgb(80 130 160 / 16%) 46%,
+        rgb(80 130 160 / 16%) 48%,
+        transparent 49%
+      )
+    `;
+  }
+
+  return undefined;
+}
+
+function title(value: string) {
+  return value
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function terrainColor(
+  type: TerrainType,
+  colors: MapColors
+) {
+  switch (type) {
+    case "land":
+      return colors.land;
+
+    case "water":
+      return colors.water;
+
+    case "forest":
+      return colors.forest;
+
+    case "mountain":
+      return colors.mountain;
+
+    case "desert":
+      return colors.desert;
+
+    case "plains":
+      return colors.plains;
+
+    case "swamp":
+      return "#526d58";
+
+    case "snow":
+      return "#e7edf0";
+  }
+}
+
+export function MapPage({
+  worldId,
+}: {
+  worldId: string;
+}) {
+  const storageKey = `storyforge-maps-${worldId}`;
+
+  const [maps, setMaps] = useState<StoryMap[]>([]);
+  const [loadedWorldId, setLoadedWorldId] = useState("");
+
+  const [selectedMapId, setSelectedMapId] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+
+  const [newMapName, setNewMapName] = useState("");
+  const [newMapType, setNewMapType] =
+    useState<MapType>("world");
+
+  const [tool, setTool] =
+    useState<EditorTool>("select");
+
+  const [drawMode, setDrawMode] =
+    useState<DrawMode>("freehand");
+
+  const [brushShape, setBrushShape] =
+    useState<BrushShape>("round");
+
+  const [terrainStyles, setTerrainStyles] =
+    useState<Record<TerrainType, string>>({
+      ...DEFAULT_TERRAIN_STYLES,
+    });
+
+  const [brushSize, setBrushSize] = useState(6);
+  const [gridSize, setGridSize] = useState(28);
+  const [splatterDensity, setSplatterDensity] = useState(5);
+  const [showGrid, setShowGrid] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const [locationEditor, setLocationEditor] =
+    useState<{
+      location: MapLocation;
+      isNew: boolean;
+    } | null>(null);
+
+  const [placingLocation, setPlacingLocation] =
+    useState(false);
+
+  const [movingLocationId, setMovingLocationId] =
+    useState("");
+
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const paintingRef = useRef(false);
+  const currentStrokeIdRef = useRef("");
+
+  const lastPaintRef = useRef<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const activeMap = useMemo(
+    () =>
+      maps.find((map) => map.id === selectedMapId) ??
+      null,
+    [maps, selectedMapId]
+  );
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const parsed: unknown = raw
+        ? JSON.parse(raw)
+        : [];
+
+      if (Array.isArray(parsed)) {
+        const loaded = parsed as StoryMap[];
+
+        setMaps(
+          loaded.map((map) => ({
+            ...map,
+            base: map.base ?? "water",
+            colors: {
+              ...map.colors,
+              water:
+                map.style === "old-timey" &&
+                map.colors?.water === "#8fa7a6"
+                  ? "#6f9fbd"
+                  : map.colors?.water ?? "#6f9fbd",
+            },
+            terrain: Array.isArray(map.terrain)
+              ? map.terrain
+              : [],
+            locations: Array.isArray(map.locations)
+              ? map.locations
+              : [],
+          }))
+        );
+      } else {
+        setMaps([]);
+      }
+    } catch {
+      setMaps([]);
+    }
+
+    setSelectedMapId("");
+    setEditorOpen(false);
+    setLoadedWorldId(worldId);
+    setLocationEditor(null);
+    setPlacingLocation(false);
+    setMovingLocationId("");
+    setTool("select");
+  }, [storageKey, worldId]);
+
+  useEffect(() => {
+    if (loadedWorldId !== worldId) return;
+
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify(maps)
+    );
+  }, [
+    maps,
+    loadedWorldId,
+    storageKey,
+    worldId,
+  ]);
+
+  const updateMap = (
+    mapId: string,
+    update:
+      | Partial<StoryMap>
+      | ((map: StoryMap) => StoryMap)
+  ) => {
+    setMaps((old) =>
+      old.map((map) => {
+        if (map.id !== mapId) return map;
+
+        const next =
+          typeof update === "function"
+            ? update(map)
+            : {
+                ...map,
+                ...update,
+              };
+
+        return {
+          ...next,
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
+  };
+
+  const openMap = (mapId: string) => {
+    setSelectedMapId(mapId);
+    setEditorOpen(true);
+
+    setTool("select");
+    setLocationEditor(null);
+    setPlacingLocation(false);
+    setMovingLocationId("");
+    setShowSettings(false);
+  };
+
+  const closeEditor = () => {
+    setEditorOpen(false);
+
+    setTool("select");
+    setLocationEditor(null);
+    setPlacingLocation(false);
+    setMovingLocationId("");
+    setShowSettings(false);
+  };
+
+  const createMap = () => {
+    const trimmedName = newMapName.trim();
+
+    if (!trimmedName) return;
+
+    const now = new Date().toISOString();
+
+    const map: StoryMap = {
+      id: crypto.randomUUID(),
+      name: trimmedName,
+      type: newMapType,
+      style: "old-timey",
+      colors: {
+        ...STYLE_PRESETS["old-timey"],
+      },
+      base: "water",
+      terrain: [],
+      locations: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setMaps((old) => [...old, map]);
+
+    setNewMapName("");
+
+    setSelectedMapId(map.id);
+    setEditorOpen(true);
+    setTool("select");
+  };
+
+  const deleteMap = () => {
+    if (!activeMap) return;
+
+    const remaining = maps.filter(
+      (map) => map.id !== activeMap.id
+    );
+
+    setMaps(remaining);
+    setSelectedMapId("");
+    setEditorOpen(false);
+    setLocationEditor(null);
+  };
+
+  const changeStyle = (style: MapStyle) => {
+    if (!activeMap) return;
+
+    if (style === "custom") {
+      updateMap(activeMap.id, {
+        style,
+      });
+
+      return;
+    }
+
+    updateMap(activeMap.id, {
+      style,
+      colors: {
+        ...STYLE_PRESETS[style],
+      },
+    });
+  };
+
+  const updateColor = (
+    key: keyof MapColors,
+    value: string
+  ) => {
+    if (!activeMap) return;
+
+    updateMap(activeMap.id, {
+      style: "custom",
+      colors: {
+        ...activeMap.colors,
+        [key]: value,
+      },
+    });
+  };
+
+  const canvasPoint = (
+    event: ReactPointerEvent<HTMLDivElement>
+  ) => {
+    const rect =
+      event.currentTarget.getBoundingClientRect();
+
+    const rawX =
+      ((event.clientX - rect.left) / rect.width) *
+      100;
+
+    const rawY =
+      ((event.clientY - rect.top) / rect.height) *
+      100;
+
+    return {
+      x: Math.max(0, Math.min(100, rawX)),
+      y: Math.max(0, Math.min(100, rawY)),
+    };
+  };
+
+  const paintAt = (
+    x: number,
+    y: number
+  ) => {
+    if (!activeMap) return;
+
+    if (
+      tool === "select" ||
+      tool === "location"
+    ) {
+      return;
+    }
+
+    if (drawMode === "grid") {
+      const rect =
+        canvasRef.current?.getBoundingClientRect();
+
+      if (!rect || rect.width <= 0 || rect.height <= 0) {
+        return;
+      }
+
+      const cellPixels = gridSize;
+
+      const xPixels = (x / 100) * rect.width;
+      const yPixels = (y / 100) * rect.height;
+
+      const snappedXPixels =
+        Math.floor(xPixels / cellPixels) * cellPixels +
+        cellPixels / 2;
+
+      const snappedYPixels =
+        Math.floor(yPixels / cellPixels) * cellPixels +
+        cellPixels / 2;
+
+      const snappedX =
+        (snappedXPixels / rect.width) * 100;
+
+      const snappedY =
+        (snappedYPixels / rect.height) * 100;
+
+      const cellWidthPercent =
+        (cellPixels / rect.width) * 100;
+
+      if (tool === "erase") {
+        updateMap(activeMap.id, (map) => ({
+          ...map,
+          terrain: map.terrain.filter((stamp) => {
+            if (stamp.mode !== "grid") return true;
+
+            const stampXPixels =
+              (stamp.x / 100) * rect.width;
+
+            const stampYPixels =
+              (stamp.y / 100) * rect.height;
+
+            return (
+              Math.abs(stampXPixels - snappedXPixels) >
+                cellPixels / 2 ||
+              Math.abs(stampYPixels - snappedYPixels) >
+                cellPixels / 2
+            );
+          }),
+        }));
+
+        return;
+      }
+
+      const terrainTool = tool as TerrainType;
+
+      updateMap(activeMap.id, (map) => {
+        const alreadyPainted =
+          map.terrain.some((stamp) => {
+            if (
+              stamp.mode !== "grid" ||
+              stamp.type !== terrainTool
+            ) {
+              return false;
+            }
+
+            const stampXPixels =
+              (stamp.x / 100) * rect.width;
+
+            const stampYPixels =
+              (stamp.y / 100) * rect.height;
+
+            return (
+              Math.abs(stampXPixels - snappedXPixels) < 1 &&
+              Math.abs(stampYPixels - snappedYPixels) < 1
+            );
+          });
+
+        if (alreadyPainted) return map;
+
+        return {
+          ...map,
+          terrain: [
+            ...map.terrain,
+            {
+              id: crypto.randomUUID(),
+              type: terrainTool,
+              x: snappedX,
+              y: snappedY,
+              size: cellWidthPercent,
+              mode: "grid",
+              shape: "square",
+              strokeId:
+                currentStrokeIdRef.current ||
+                crypto.randomUUID(),
+              terrainStyle:
+                terrainStyles[terrainTool],
+            },
+          ],
+        };
+      });
+
+      return;
+    }
+
+    if (tool === "erase") {
+      const eraseRadius = Math.max(
+        3,
+        brushSize / 2
+      );
+
+      updateMap(activeMap.id, (map) => ({
+        ...map,
+        terrain: map.terrain.filter(
+          (stamp) => {
+            const dx = stamp.x - x;
+            const dy = stamp.y - y;
+
+            return (
+              Math.sqrt(dx * dx + dy * dy) >
+              eraseRadius
+            );
+          }
+        ),
+      }));
+
+      return;
+    }
+
+    const previous = lastPaintRef.current;
+    const terrainTool = tool as TerrainType;
+
+    const strokeId =
+      currentStrokeIdRef.current ||
+      crypto.randomUUID();
+
+    currentStrokeIdRef.current = strokeId;
+
+    const points: Array<{
+      x: number;
+      y: number;
+    }> = [];
+
+    if (!previous) {
+      points.push({ x, y });
+    } else {
+      const dx = x - previous.x;
+      const dy = y - previous.y;
+
+      const distance = Math.sqrt(
+        dx * dx + dy * dy
+      );
+
+      const spacing =
+        brushShape === "speckled"
+          ? Math.max(0.5, brushSize * 0.1)
+          : Math.max(0.12, brushSize * 0.03);
+
+      const steps = Math.max(
+        1,
+        Math.ceil(distance / spacing)
+      );
+
+      for (let index = 1; index <= steps; index += 1) {
+        const progress = index / steps;
+
+        points.push({
+          x: previous.x + dx * progress,
+          y: previous.y + dy * progress,
+        });
+      }
+    }
+
+    lastPaintRef.current = { x, y };
+
+    const rect =
+      canvasRef.current?.getBoundingClientRect();
+
+    const canvasAspect =
+      rect && rect.height > 0
+        ? rect.width / rect.height
+        : 1.6;
+
+    const stamps: TerrainStamp[] = [];
+
+    for (const point of points) {
+      if (brushShape !== "speckled") {
+        stamps.push({
+          id: crypto.randomUUID(),
+          type: terrainTool,
+          x: point.x,
+          y: point.y,
+          size: brushSize,
+          mode: "freehand",
+          shape: brushShape,
+          strokeId,
+          terrainStyle:
+            terrainStyles[terrainTool],
+        });
+
+        continue;
+      }
+
+      const droplets = Math.max(
+        3,
+        Math.round(
+          3 +
+          splatterDensity * 1.5 +
+          brushSize * 0.1
+        )
+      );
+
+      const splatterRadius =
+        brushSize * 0.55;
+
+      for (
+        let index = 0;
+        index < droplets;
+        index += 1
+      ) {
+        const angle =
+          Math.random() * Math.PI * 2;
+
+        const distanceFromCenter =
+          Math.sqrt(Math.random()) *
+          splatterRadius;
+
+        const offsetX =
+          Math.cos(angle) *
+          distanceFromCenter;
+
+        const offsetY =
+          Math.sin(angle) *
+          distanceFromCenter *
+          canvasAspect;
+
+        const dropletSize =
+          Math.max(
+            0.18,
+            brushSize *
+              (
+                0.02 +
+                Math.random() *
+                  (0.03 +
+                    splatterDensity * 0.004)
+              )
+          );
+
+        stamps.push({
+          id: crypto.randomUUID(),
+          type: terrainTool,
+          x: Math.max(
+            0,
+            Math.min(
+              100,
+              point.x + offsetX
+            )
+          ),
+          y: Math.max(
+            0,
+            Math.min(
+              100,
+              point.y + offsetY
+            )
+          ),
+          size: dropletSize,
+          mode: "freehand",
+          shape: "speckled",
+          strokeId,
+          terrainStyle:
+            terrainStyles[terrainTool],
+        });
+      }
+    }
+
+    updateMap(activeMap.id, (map) => ({
+      ...map,
+      terrain: [
+        ...map.terrain,
+        ...stamps,
+      ],
+    }));
+  };
+
+  const beginPainting = (
+    event: ReactPointerEvent<HTMLDivElement>
+  ) => {
+    if (!activeMap) return;
+
+    const point = canvasPoint(event);
+
+    if (
+      placingLocation &&
+      locationEditor
+    ) {
+      const cleanLocation: MapLocation = {
+        ...locationEditor.location,
+        name:
+          locationEditor.location.name.trim() ||
+          "Unnamed Location",
+        description:
+          locationEditor.location.description?.trim() ||
+          "",
+        x: point.x,
+        y: point.y,
+      };
+
+      updateMap(activeMap.id, (map) => ({
+        ...map,
+        locations: locationEditor.isNew
+          ? [
+              ...map.locations,
+              cleanLocation,
+            ]
+          : map.locations.map((location) =>
+              location.id === cleanLocation.id
+                ? cleanLocation
+                : location
+            ),
+      }));
+
+      setLocationEditor(null);
+      setPlacingLocation(false);
+      setTool("select");
+
+      return;
+    }
+
+    if (movingLocationId) {
+      updateMap(activeMap.id, (map) => ({
+        ...map,
+        locations: map.locations.map(
+          (location) =>
+            location.id === movingLocationId
+              ? {
+                  ...location,
+                  x: point.x,
+                  y: point.y,
+                }
+              : location
+        ),
+      }));
+
+      setMovingLocationId("");
+      setTool("select");
+
+      return;
+    }
+
+    if (
+      tool === "select" ||
+      tool === "location"
+    ) {
+      return;
+    }
+
+    paintingRef.current = true;
+    lastPaintRef.current = null;
+    currentStrokeIdRef.current =
+      crypto.randomUUID();
+
+    event.currentTarget.setPointerCapture(
+      event.pointerId
+    );
+
+    paintAt(point.x, point.y);
+  };
+
+  const continuePainting = (
+    event: ReactPointerEvent<HTMLDivElement>
+  ) => {
+    if (!paintingRef.current) return;
+
+    const point = canvasPoint(event);
+
+    paintAt(point.x, point.y);
+  };
+
+  const stopPainting = () => {
+    paintingRef.current = false;
+    lastPaintRef.current = null;
+    currentStrokeIdRef.current = "";
+  };
+
+  const smoothLastAction = () => {
+    if (!activeMap) return;
+
+    const lastActionId = [...activeMap.terrain]
+      .reverse()
+      .find((stamp) => stamp.strokeId)
+      ?.strokeId;
+
+    if (!lastActionId) return;
+
+    updateMap(activeMap.id, (map) => {
+      const action = map.terrain.filter(
+        (stamp) =>
+          stamp.strokeId === lastActionId
+      );
+
+      if (action.length < 2) {
+        return map;
+      }
+
+      const wasGrid = action.some(
+        (stamp) => stamp.mode === "grid"
+      );
+
+      const wasSplatter = action.some(
+        (stamp) =>
+          stamp.shape === "speckled"
+      );
+
+      let points = action.map((stamp) => ({
+        x: stamp.x,
+        y: stamp.y,
+      }));
+
+      const passes = wasSplatter
+        ? 1
+        : wasGrid
+          ? 4
+          : 3;
+
+      const centerWeight = wasSplatter
+        ? 0.82
+        : wasGrid
+          ? 0.42
+          : 0.55;
+
+      const neighborWeight =
+        (1 - centerWeight) / 2;
+
+      for (
+        let pass = 0;
+        pass < passes;
+        pass += 1
+      ) {
+        points = points.map(
+          (point, index, current) => {
+            if (
+              index === 0 ||
+              index === current.length - 1
+            ) {
+              return point;
+            }
+
+            const previous =
+              current[index - 1];
+
+            const next =
+              current[index + 1];
+
+            return {
+              x:
+                previous.x *
+                  neighborWeight +
+                point.x *
+                  centerWeight +
+                next.x *
+                  neighborWeight,
+
+              y:
+                previous.y *
+                  neighborWeight +
+                point.y *
+                  centerWeight +
+                next.y *
+                  neighborWeight,
+            };
+          }
+        );
+      }
+
+      let index = 0;
+
+      return {
+        ...map,
+
+        terrain: map.terrain.map(
+          (stamp) => {
+            if (
+              stamp.strokeId !==
+              lastActionId
+            ) {
+              return stamp;
+            }
+
+            const point =
+              points[index++] ?? {
+                x: stamp.x,
+                y: stamp.y,
+              };
+
+            if (wasGrid) {
+              return {
+                ...stamp,
+                x: point.x,
+                y: point.y,
+                mode:
+                  "freehand" as const,
+                shape:
+                  "round" as const,
+              };
+            }
+
+            if (wasSplatter) {
+              return {
+                ...stamp,
+
+                x:
+                  stamp.x * 0.68 +
+                  point.x * 0.32,
+
+                y:
+                  stamp.y * 0.68 +
+                  point.y * 0.32,
+              };
+            }
+
+            return {
+              ...stamp,
+              x: point.x,
+              y: point.y,
+            };
+          }
+        ),
+      };
+    });
+  };
+
+  const undoTerrain = () => {
+    if (
+      !activeMap ||
+      activeMap.terrain.length === 0
+    ) {
+      return;
+    }
+
+    const lastStamp =
+      activeMap.terrain[
+        activeMap.terrain.length - 1
+      ];
+
+    const lastActionId =
+      lastStamp.strokeId;
+
+    updateMap(activeMap.id, (map) => {
+      if (!lastActionId) {
+        return {
+          ...map,
+          terrain:
+            map.terrain.slice(0, -1),
+        };
+      }
+
+      return {
+        ...map,
+        terrain: map.terrain.filter(
+          (stamp) =>
+            stamp.strokeId !==
+            lastActionId
+        ),
+      };
+    });
+  };
+
+  const addLocation = () => {
+    setTool("location");
+    setMovingLocationId("");
+    setPlacingLocation(false);
+
+    setLocationEditor({
+      isNew: true,
+      location: {
+        id: crypto.randomUUID(),
+        name: "",
+        type: "city",
+        icon: LOCATION_ICONS.city,
+        x: 50,
+        y: 50,
+        description: "",
+      },
+    });
+  };
+
+  const saveExistingLocation = () => {
+    if (
+      !activeMap ||
+      !locationEditor ||
+      locationEditor.isNew
+    ) {
+      return;
+    }
+
+    const cleanLocation: MapLocation = {
+      ...locationEditor.location,
+      name:
+        locationEditor.location.name.trim() ||
+        "Unnamed Location",
+      description:
+        locationEditor.location.description?.trim() ||
+        "",
+    };
+
+    updateMap(activeMap.id, (map) => ({
+      ...map,
+      locations: map.locations.map(
+        (location) =>
+          location.id === cleanLocation.id
+            ? cleanLocation
+            : location
+      ),
+    }));
+
+    setLocationEditor(null);
+    setTool("select");
+  };
+
+  const removeLocation = () => {
+    if (
+      !activeMap ||
+      !locationEditor ||
+      locationEditor.isNew
+    ) {
+      return;
+    }
+
+    updateMap(activeMap.id, (map) => ({
+      ...map,
+      locations: map.locations.filter(
+        (location) =>
+          location.id !==
+          locationEditor.location.id
+      ),
+    }));
+
+    setLocationEditor(null);
+    setTool("select");
+  };
+
+  if (!editorOpen || !activeMap) {
+    return (
+      <div className="sf-map-library-v2">
+        <div className="sf-map-library-heading">
+          <div>
+            <h2>Maps</h2>
+
+            <p>
+              Create and edit maps for this world.
+            </p>
+          </div>
+        </div>
+
+        <div className="card sf-map-create-card-v2">
+          <h3>Create Map</h3>
+
+          <div className="sf-map-create-grid-v2">
+            <label>
+              Map Name
+
+              <input
+                className="form-input"
+                value={newMapName}
+                onChange={(event) =>
+                  setNewMapName(event.target.value)
+                }
+                placeholder="Example: The Western Realms"
+              />
+            </label>
+
+            <label>
+              Map Type
+
+              <select
+                className="form-input"
+                value={newMapType}
+                onChange={(event) =>
+                  setNewMapType(
+                    event.target.value as MapType
+                  )
+                }
+              >
+                {MAP_TYPES.map((type) => (
+                  <option
+                    key={type}
+                    value={type}
+                  >
+                    {title(type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={createMap}
+            disabled={!newMapName.trim()}
+          >
+            + Create Map
+          </button>
+        </div>
+
+        {maps.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">
+              🧭
+            </div>
+
+            <h3>No maps yet</h3>
+
+            <p>
+              Create a world, region, city, or
+              dungeon map to begin.
+            </p>
+          </div>
+        ) : (
+          <div className="sf-map-library-grid-v2">
+            {maps.map((map) => (
+              <button
+                key={map.id}
+                type="button"
+                className="card sf-map-library-item-v2"
+                onClick={() => openMap(map.id)}
+              >
+                <strong>{map.name}</strong>
+
+                <span>
+                  {title(map.type)} ·{" "}
+                  {title(map.style)}
+                </span>
+
+                <small>
+                  {map.terrain.length} terrain
+                  marks · {map.locations.length}{" "}
+                  locations
+                </small>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="sf-map-editor-v2">
+      <div className="sf-map-editor-titlebar-v2">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={closeEditor}
+        >
+          ← Maps
+        </button>
+
+        <div className="sf-map-editor-name-v2">
+          <strong>{activeMap.name}</strong>
+
+          <span>
+            {title(activeMap.type)}
+          </span>
+        </div>
+
+        <div className="sf-map-autosave-v2">
+          Saved automatically
+        </div>
+      </div>
+
+      <div className="sf-map-toolbar-v2">
+        <div className="sf-map-toolbar-group-v2">
+          <button
+            type="button"
+            className={
+              tool === "select"
+                ? "btn btn-primary"
+                : "btn btn-secondary"
+            }
+            onClick={() => {
+              setTool("select");
+              setLocationEditor(null);
+              setPlacingLocation(false);
+              setMovingLocationId("");
+            }}
+          >
+            ↖ Select
+          </button>
+
+          {TERRAIN_TOOLS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={
+                tool === item.key
+                  ? "btn btn-primary"
+                  : "btn btn-secondary"
+              }
+              onClick={() => {
+                setTool(item.key);
+                setLocationEditor(null);
+                setPlacingLocation(false);
+                setMovingLocationId("");
+              }}
+            >
+              {item.icon} {item.label}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            className={
+              tool === "erase"
+                ? "btn btn-primary"
+                : "btn btn-secondary"
+            }
+            onClick={() => {
+              setTool("erase");
+              setLocationEditor(null);
+            }}
+          >
+            ◻ Eraser
+          </button>
+
+          <button
+            type="button"
+            className={
+              tool === "location"
+                ? "btn btn-primary"
+                : "btn btn-secondary"
+            }
+            onClick={addLocation}
+          >
+            📍 Location
+          </button>
+        </div>
+
+        <div className="sf-map-toolbar-group-v2">
+          {isTerrainTool(tool) &&
+            TERRAIN_STYLE_OPTIONS[tool].length > 1 && (
+              <label className="sf-map-brush-control-v2 sf-map-terrain-style-v1">
+                Style
+
+                <select
+                  value={terrainStyles[tool]}
+                  onChange={(event) =>
+                    setTerrainStyles((old) => ({
+                      ...old,
+                      [tool]: event.target.value,
+                    }))
+                  }
+                >
+                  {TERRAIN_STYLE_OPTIONS[
+                    tool
+                  ].map((option) => (
+                    <option
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+          <button
+            type="button"
+            className={
+              drawMode === "freehand"
+                ? "btn btn-primary"
+                : "btn btn-secondary"
+            }
+            onClick={() =>
+              setDrawMode("freehand")
+            }
+          >
+            ✏ Freehand
+          </button>
+
+          <button
+            type="button"
+            className={
+              drawMode === "grid"
+                ? "btn btn-primary"
+                : "btn btn-secondary"
+            }
+            onClick={() => {
+              setDrawMode("grid");
+              setShowGrid(true);
+            }}
+          >
+            ▦ Grid
+          </button>
+
+          {drawMode === "freehand" && (
+            <>
+              <label className="sf-map-brush-control-v2">
+                Brush
+                <input
+                  type="range"
+                  min="1"
+                  max="40"
+                  step="1"
+                  value={brushSize}
+                  onChange={(event) =>
+                    setBrushSize(
+                      Number(event.target.value)
+                    )
+                  }
+                />
+                <span>{brushSize}</span>
+              </label>
+
+              <label className="sf-map-brush-control-v2">
+                Shape
+                <select
+                  value={brushShape}
+                  onChange={(event) =>
+                    setBrushShape(
+                      event.target.value as BrushShape
+                    )
+                  }
+                >
+                  <option value="round">Round</option>
+                  <option value="square">Square</option>
+                  <option value="speckled">
+                    Paint Splatter
+                  </option>
+                </select>
+              </label>
+
+              {brushShape === "speckled" && (
+                <label className="sf-map-brush-control-v2">
+                  Density
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={splatterDensity}
+                    onChange={(event) =>
+                      setSplatterDensity(
+                        Number(event.target.value)
+                      )
+                    }
+                  />
+                  <span>{splatterDensity}</span>
+                </label>
+              )}
+            </>
+          )}
+
+          {drawMode === "grid" && (
+            <label className="sf-map-brush-control-v2">
+              Grid Size
+              <input
+                type="range"
+                min="8"
+                max="120"
+                step="2"
+                value={gridSize}
+                onChange={(event) =>
+                  setGridSize(
+                    Number(event.target.value)
+                  )
+                }
+              />
+              <span>{gridSize}px</span>
+            </label>
+          )}
+
+          <button
+            type="button"
+            className={
+              showGrid
+                ? "btn btn-primary"
+                : "btn btn-secondary"
+            }
+            onClick={() =>
+              setShowGrid((old) => !old)
+            }
+          >
+            # Grid Overlay
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={undoTerrain}
+            disabled={
+              activeMap.terrain.length === 0
+            }
+          >
+            ↶ Undo
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={smoothLastAction}
+            disabled={
+              !activeMap.terrain.some(
+                (stamp) =>
+                  Boolean(stamp.strokeId)
+              )
+            }
+            title="Smooth the most recent terrain action."
+          >
+            ≋ Smooth Last Action
+          </button>
+
+          <button
+            type="button"
+            className={
+              showSettings
+                ? "btn btn-primary"
+                : "btn btn-secondary"
+            }
+            onClick={() =>
+              setShowSettings((old) => !old)
+            }
+          >
+            ⚙ Map
+          </button>
+        </div>
+      </div>
+
+      {showSettings && (
+        <div className="card sf-map-settings-v2">
+          <div className="sf-map-settings-grid-v2">
+            <label>
+              Map Name
+
+              <input
+                className="form-input"
+                value={activeMap.name}
+                onChange={(event) =>
+                  updateMap(activeMap.id, {
+                    name: event.target.value,
+                  })
+                }
+              />
+            </label>
+
+            <label>
+              Type
+
+              <select
+                className="form-input"
+                value={activeMap.type}
+                onChange={(event) =>
+                  updateMap(activeMap.id, {
+                    type: event.target
+                      .value as MapType,
+                  })
+                }
+              >
+                {MAP_TYPES.map((type) => (
+                  <option
+                    key={type}
+                    value={type}
+                  >
+                    {title(type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Style
+
+              <select
+                className="form-input"
+                value={activeMap.style}
+                onChange={(event) =>
+                  changeStyle(
+                    event.target
+                      .value as MapStyle
+                  )
+                }
+              >
+                {MAP_STYLES.map((style) => (
+                  <option
+                    key={style}
+                    value={style}
+                  >
+                    {title(style)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Canvas Base
+
+              <select
+                className="form-input"
+                value={activeMap.base ?? "water"}
+                onChange={(event) =>
+                  updateMap(activeMap.id, {
+                    base:
+                      event.target.value as CanvasBase,
+                  })
+                }
+              >
+                <option value="water">Water</option>
+                <option value="land">Land</option>
+                <option value="blank">Blank Parchment</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="sf-map-color-row-v2">
+            {(
+              Object.keys(
+                activeMap.colors
+              ) as Array<keyof MapColors>
+            ).map((key) => (
+              <label key={key}>
+                {title(key)}
+
+                <input
+                  type="color"
+                  value={
+                    activeMap.colors[key]
+                  }
+                  onChange={(event) =>
+                    updateColor(
+                      key,
+                      event.target.value
+                    )
+                  }
+                />
+              </label>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={deleteMap}
+          >
+            Delete Map
+          </button>
+        </div>
+      )}
+
+      <div className="sf-map-canvas-wrap-v2">
+        <div
+          ref={canvasRef}
+          className={[
+            "sf-map-canvas-v2",
+            showGrid
+              ? "sf-map-grid-visible-v2"
+              : "",
+            tool !== "select" &&
+            tool !== "location"
+              ? "sf-map-drawing-v2"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          style={{
+            backgroundColor:
+              (activeMap.base ?? "water") === "water"
+                ? activeMap.colors.water
+                : (activeMap.base ?? "water") === "land"
+                  ? activeMap.colors.land
+                  : "#eadfbe",
+            borderColor:
+              activeMap.colors.accent,
+            backgroundSize: showGrid
+              ? `${gridSize}px ${gridSize}px`
+              : undefined,
+          }}
+          onPointerDown={beginPainting}
+          onPointerMove={continuePainting}
+          onPointerUp={stopPainting}
+          onPointerCancel={stopPainting}
+          onPointerLeave={stopPainting}
+        >
+          {activeMap.terrain.map((stamp) => {
+            const symbol = terrainSymbol(
+              stamp.type,
+              stamp.terrainStyle
+            );
+
+            const texture = terrainTexture(
+              stamp.type,
+              stamp.terrainStyle
+            );
+
+            return (
+              <div
+                key={stamp.id}
+                className={[
+                  "sf-map-stroke-v2",
+                  stamp.mode === "grid"
+                    ? "sf-map-stroke-grid-v2"
+                    : "sf-map-stroke-freehand-v2",
+                ].join(" ")}
+                style={{
+                  left: `${stamp.x}%`,
+                  top: `${stamp.y}%`,
+                  width: `${stamp.size}%`,
+                  aspectRatio: "1 / 1",
+                  borderRadius:
+                    stamp.mode === "grid" ||
+                    stamp.shape === "square"
+                      ? "0"
+                      : stamp.shape === "speckled"
+                        ? "46% 54% 43% 57%"
+                        : "999px",
+                  backgroundColor:
+                    terrainColor(
+                      stamp.type,
+                      activeMap.colors
+                    ),
+                  backgroundImage: texture,
+                  backgroundSize:
+                    stamp.terrainStyle ===
+                    "sand-marks"
+                      ? "8px 8px"
+                      : undefined,
+                  opacity:
+                    stamp.shape === "speckled"
+                      ? 0.78
+                      : 0.96,
+                  overflow: "hidden",
+                }}
+              >
+                {symbol &&
+                  stamp.size >= 0.65 && (
+                    <span
+                      className="sf-map-terrain-symbol-v1"
+                      style={{
+                        color:
+                          activeMap.colors.label,
+                      }}
+                    >
+                      {symbol}
+                    </span>
+                  )}
+              </div>
+            );
+          })}
+
+          {activeMap.locations.map(
+            (location) => (
+              <button
+                key={location.id}
+                type="button"
+                className="sf-map-marker-v2"
+                style={{
+                  left: `${location.x}%`,
+                  top: `${location.y}%`,
+                  color:
+                    activeMap.colors.label,
+                }}
+                onPointerDown={(event) =>
+                  event.stopPropagation()
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+
+                  setTool("location");
+
+                  setLocationEditor({
+                    isNew: false,
+                    location: {
+                      ...location,
+                    },
+                  });
+                }}
+              >
+                <span className="sf-map-marker-icon-v2">
+                  {location.icon}
+                </span>
+
+                <span className="sf-map-marker-label-v2">
+                  {location.name}
+                </span>
+              </button>
+            )
+          )}
+
+          {placingLocation && (
+            <div className="sf-map-canvas-message-v2">
+              Click where you want to place
+              this location.
+            </div>
+          )}
+
+          {movingLocationId && (
+            <div className="sf-map-canvas-message-v2">
+              Click the new location.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="sf-map-statusbar-v2">
+        <span>
+          Tool:{" "}
+          <strong>{title(tool)}</strong>
+        </span>
+
+        <span>
+          Mode:{" "}
+          <strong>{title(drawMode)}</strong>
+        </span>
+
+        <span>
+          {activeMap.terrain.length} terrain
+          marks
+        </span>
+
+        <span>
+          {activeMap.locations.length}{" "}
+          locations
+        </span>
+      </div>
+
+      {locationEditor && (
+        <div className="card sf-map-location-editor-v2">
+          <div className="sf-map-location-editor-title-v2">
+            <h3>
+              {locationEditor.isNew
+                ? "Add Location"
+                : "Edit Location"}
+            </h3>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setLocationEditor(null);
+                setPlacingLocation(false);
+                setTool("select");
+              }}
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="sf-map-location-grid-v2">
+            <label>
+              Name
+
+              <input
+                className="form-input"
+                value={
+                  locationEditor.location.name
+                }
+                onChange={(event) =>
+                  setLocationEditor({
+                    ...locationEditor,
+                    location: {
+                      ...locationEditor.location,
+                      name: event.target.value,
+                    },
+                  })
+                }
+                placeholder="Example: Kingsgaurd"
+              />
+            </label>
+
+            <label>
+              Type
+
+              <select
+                className="form-input"
+                value={
+                  locationEditor.location.type
+                }
+                onChange={(event) => {
+                  const type =
+                    event.target
+                      .value as LocationType;
+
+                  setLocationEditor({
+                    ...locationEditor,
+                    location: {
+                      ...locationEditor.location,
+                      type,
+                      icon:
+                        LOCATION_ICONS[type],
+                    },
+                  });
+                }}
+              >
+                {(
+                  Object.keys(
+                    LOCATION_ICONS
+                  ) as LocationType[]
+                ).map((type) => (
+                  <option
+                    key={type}
+                    value={type}
+                  >
+                    {title(type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Icon
+
+              <input
+                className="form-input"
+                value={
+                  locationEditor.location.icon
+                }
+                onChange={(event) =>
+                  setLocationEditor({
+                    ...locationEditor,
+                    location: {
+                      ...locationEditor.location,
+                      icon: event.target.value,
+                    },
+                  })
+                }
+                maxLength={8}
+              />
+            </label>
+          </div>
+
+          <label>
+            Description
+
+            <textarea
+              className="form-input sf-map-location-notes-v2"
+              value={
+                locationEditor.location
+                  .description ?? ""
+              }
+              onChange={(event) =>
+                setLocationEditor({
+                  ...locationEditor,
+                  location: {
+                    ...locationEditor.location,
+                    description:
+                      event.target.value,
+                  },
+                })
+              }
+              placeholder="What is this place known for?"
+            />
+          </label>
+
+          <div className="sf-map-location-actions-v2">
+            {!locationEditor.isNew && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={removeLocation}
+                >
+                  Delete
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setMovingLocationId(
+                      locationEditor.location.id
+                    );
+
+                    setLocationEditor(null);
+                    setTool("location");
+                  }}
+                >
+                  Move on Map
+                </button>
+              </>
+            )}
+
+            {locationEditor.isNew ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={
+                  !locationEditor.location.name.trim()
+                }
+                onClick={() =>
+                  setPlacingLocation(true)
+                }
+              >
+                Place on Map
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={
+                  saveExistingLocation
+                }
+              >
+                Save Location
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

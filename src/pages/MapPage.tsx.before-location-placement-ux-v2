@@ -12,12 +12,7 @@ import type {
 type MapType = "world" | "region" | "city" | "dungeon";
 type MapStyle = "old-timey" | "modern" | "sci-fi" | "custom";
 
-type DrawMode =
-  | "freehand"
-  | "grid"
-  | "area"
-  | "fill"
-  | "path";
+type DrawMode = "freehand" | "grid" | "area";
 type BrushShape = "round" | "square";
 type CanvasBase = "water" | "land" | "blank";
 
@@ -35,8 +30,6 @@ type EditorTool =
   | "select"
   | TerrainType
   | "region"
-  | "river"
-  | "road"
   | "erase"
   | "location";
 
@@ -85,45 +78,11 @@ type TerrainRegion = {
   createdAt: string;
 };
 
-type MapPathKind =
-  | "river"
-  | "road";
-
-type PathSegmentMode =
-  | "straight"
-  | "curve";
-
-type RoadStyle =
-  | "pathway"
-  | "dirt"
-  | "stone";
-
-type MapPathPoint = {
-  x: number;
-  y: number;
-
-  /*
-   * Controls the segment from the PREVIOUS
-   * point to this point.
-   */
-  curveFromPrevious?: boolean;
-};
-
-type MapPath = {
-  id: string;
-  kind: MapPathKind;
-  points: MapPathPoint[];
-  width: number;
-  roadStyle?: RoadStyle;
-  createdAt: string;
-};
-
 type MapHistorySnapshot = {
   mapId: string;
   terrain: TerrainStamp[];
   regions: TerrainRegion[];
   locations: MapLocation[];
-  paths: MapPath[];
 };
 
 type LocationType =
@@ -143,12 +102,6 @@ type LocationType =
   | "landmark"
   | "custom";
 
-type LocationSize =
-  | "tiny"
-  | "small"
-  | "medium"
-  | "large";
-
 type MapLocation = {
   id: string;
   name: string;
@@ -157,7 +110,6 @@ type MapLocation = {
   x: number;
   y: number;
   description?: string;
-  size?: LocationSize;
 
   /*
    * Used later for entrances such as caves,
@@ -177,7 +129,6 @@ type StoryMap = {
   terrain: TerrainStamp[];
   regions?: TerrainRegion[];
   locations: MapLocation[];
-  paths?: MapPath[];
   createdAt: string;
   updatedAt: string;
 };
@@ -262,181 +213,6 @@ const LOCATION_LABELS: Record<LocationType, string> = {
   landmark: "Landmark",
   custom: "Custom",
 };
-
-
-const LOCATION_SIZE_LABELS: Record<
-  LocationSize,
-  string
-> = {
-  tiny: "Tiny",
-  small: "Small",
-  medium: "Medium",
-  large: "Large",
-};
-
-function locationMapSymbol(
-  type: LocationType
-) {
-  let content = null;
-
-  switch (type) {
-    case "city":
-      content = (
-        <>
-          <path d="M8 49h48" />
-          <path d="M12 49V29l9-8 9 8v20" />
-          <path d="M34 49V23l8-7 8 7v26" />
-          <path d="M18 49V36h6v13" />
-          <path d="M40 49V33h5v16" />
-          <path d="M9 29h22M33 23h18" />
-        </>
-      );
-      break;
-
-    case "town":
-      content = (
-        <>
-          <path d="M7 50h50" />
-          <path d="M9 50V34l8-7 8 7v16" />
-          <path d="M27 50V29l9-8 9 8v21" />
-          <path d="M46 50V37l6-5 6 5v13" />
-          <path d="M15 50V40h5v10" />
-          <path d="M33 50V38h6v12" />
-        </>
-      );
-      break;
-
-    case "village":
-      content = (
-        <>
-          <path d="M9 51h46" />
-          <path d="M11 51V35l9-8 9 8v16" />
-          <path d="M34 51V38l7-6 7 6v13" />
-          <path d="M17 51V41h6v10" />
-        </>
-      );
-      break;
-
-    case "camp":
-      content = (
-        <>
-          <path d="M7 50h50" />
-          <path d="M10 50l11-25 11 25z" />
-          <path d="M37 50l8-19 9 19z" />
-          <path d="M21 25v25" />
-        </>
-      );
-      break;
-
-    case "port":
-      content = (
-        <>
-          <path d="M11 45h42" />
-          <path d="M17 45V20" />
-          <path d="M17 22h22l-7 10H17" />
-          <path d="M8 50c5-4 10 4 15 0s10 4 15 0 10 4 18 0" />
-        </>
-      );
-      break;
-
-    case "fort":
-    case "stronghold":
-    case "castle":
-      content = (
-        <>
-          <path d="M9 51V24h8v7h8v-7h14v7h8v-7h8v27z" />
-          <path d="M18 51V39h8v12" />
-          <path d="M38 51V38h8v13" />
-          <path d="M26 24V15h12v9" />
-        </>
-      );
-      break;
-
-    case "cave":
-      content = (
-        <>
-          <path d="M8 51c3-24 14-36 24-36s21 12 24 36z" />
-          <path d="M22 51c1-12 5-19 10-19s9 7 10 19" />
-        </>
-      );
-      break;
-
-    case "dungeon":
-      content = (
-        <>
-          <path d="M15 51V20h34v31" />
-          <path d="M24 51V31h16v20" />
-          <path d="M24 38h16" />
-          <path d="M28 43h12M32 48h8" />
-        </>
-      );
-      break;
-
-    case "ruins":
-      content = (
-        <>
-          <path d="M9 51h46" />
-          <path d="M15 51V24h8v27" />
-          <path d="M34 51V31h8v20" />
-          <path d="M13 24h12M32 31h12" />
-          <path d="M28 51l7-12" />
-        </>
-      );
-      break;
-
-    case "forest":
-      content = (
-        <>
-          <path d="M19 52V36M42 52V33" />
-          <path d="M19 13L7 36h24z" />
-          <path d="M42 10L29 33h26z" />
-        </>
-      );
-      break;
-
-    case "mountain":
-      content = (
-        <>
-          <path d="M5 51L23 18l10 18 8-13 18 28z" />
-          <path d="M17 29l6-11 6 11" />
-        </>
-      );
-      break;
-
-    case "landmark":
-      content = (
-        <>
-          <path d="M32 8l6 16 17 1-13 11 4 17-14-9-14 9 4-17L9 25l17-1z" />
-        </>
-      );
-      break;
-
-    case "custom":
-    default:
-      content = (
-        <>
-          <path d="M32 9l22 23-22 23L10 32z" />
-          <circle cx="32" cy="32" r="5" />
-        </>
-      );
-      break;
-  }
-
-  return (
-    <svg
-      viewBox="0 0 64 64"
-      aria-hidden="true"
-      focusable="false"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {content}
-    </svg>
-  );
-}
 
 const LOCATION_PALETTE_TYPES: LocationType[] = [
   "city",
@@ -585,20 +361,6 @@ function canUseAreaMode(
   return (
     Boolean(areaKindForTool(tool)) ||
     tool === "erase"
-  );
-}
-
-function canUseFillMode(
-  tool: EditorTool
-) {
-  return (
-    tool === "land" ||
-    tool === "water" ||
-    tool === "forest" ||
-    tool === "plains" ||
-    tool === "desert" ||
-    tool === "swamp" ||
-    tool === "snow"
   );
 }
 
@@ -871,164 +633,6 @@ function terrainColor(
   }
 }
 
-
-const ROAD_STYLE_OPTIONS: Array<{
-  value: RoadStyle;
-  label: string;
-}> = [
-  {
-    value: "pathway",
-    label: "Pathway",
-  },
-  {
-    value: "dirt",
-    label: "Dirt Road",
-  },
-  {
-    value: "stone",
-    label: "Stone Road",
-  },
-];
-
-function roadVisualForStyle(
-  style: RoadStyle | undefined
-) {
-  switch (style) {
-    case "stone":
-      return {
-        main: "#8e9295",
-        edge: "#575b5e",
-        dashArray: undefined,
-        edgeExtra: 0.16,
-      };
-
-    case "dirt":
-      return {
-        main: "#9a7651",
-        edge: "#654b35",
-        dashArray: undefined,
-        edgeExtra: 0.14,
-      };
-
-    case "pathway":
-    default:
-      return {
-        /*
-         * Thin worn-grass / walking trail.
-         */
-        main: "#b99b68",
-        edge: "#8f774f",
-        dashArray: "1.15 0.85",
-        edgeExtra: 0.10,
-      };
-  }
-}
-
-function buildMapPathD(
-  kind: MapPathKind,
-  points: MapPathPoint[]
-) {
-  if (points.length === 0) {
-    return "";
-  }
-
-  let d =
-    `M ${points[0].x} ${points[0].y}`;
-
-  for (
-    let index = 1;
-    index < points.length;
-    index += 1
-  ) {
-    const previous =
-      points[index - 1];
-
-    const current =
-      points[index];
-
-    if (
-      !current.curveFromPrevious
-    ) {
-      d +=
-        ` L ${current.x} ${current.y}`;
-
-      continue;
-    }
-
-    const dx =
-      current.x -
-      previous.x;
-
-    const dy =
-      current.y -
-      previous.y;
-
-    const distance =
-      Math.max(
-        0.001,
-        Math.sqrt(
-          dx * dx +
-          dy * dy
-        )
-      );
-
-    const midpointX =
-      (
-        previous.x +
-        current.x
-      ) / 2;
-
-    const midpointY =
-      (
-        previous.y +
-        current.y
-      ) / 2;
-
-    /*
-     * A small alternating bend keeps River/Road
-     * paths natural while remaining deterministic.
-     */
-    const bendDirection =
-      index % 2 === 0
-        ? -1
-        : 1;
-
-    const bendStrength =
-      kind === "river"
-        ? Math.min(
-            3.4,
-            distance * 0.15
-          )
-        : Math.min(
-            1.9,
-            distance * 0.08
-          );
-
-    const perpendicularX =
-      -dy / distance;
-
-    const perpendicularY =
-      dx / distance;
-
-    const controlX =
-      midpointX +
-      perpendicularX *
-        bendStrength *
-        bendDirection;
-
-    const controlY =
-      midpointY +
-      perpendicularY *
-        bendStrength *
-        bendDirection;
-
-    d +=
-      ` Q ${controlX} ${controlY} ${current.x} ${current.y}`;
-  }
-
-  return d;
-}
-
 export function MapPage({
   worldId,
 }: {
@@ -1089,36 +693,6 @@ export function MapPage({
   const [drawMode, setDrawMode] =
     useState<DrawMode>("freehand");
 
-  const [
-    pathDraft,
-    setPathDraft,
-  ] = useState<MapPath | null>(null);
-
-  const [
-    pathHoverPoint,
-    setPathHoverPoint,
-  ] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const [
-    pathSegmentMode,
-    setPathSegmentMode,
-  ] =
-    useState<PathSegmentMode>("curve");
-
-  const [
-    pathWidth,
-    setPathWidth,
-  ] = useState(1.2);
-
-  const [
-    roadStyle,
-    setRoadStyle,
-  ] =
-    useState<RoadStyle>("pathway");
-
   const [brushShape, setBrushShape] =
     useState<BrushShape>("round");
 
@@ -1163,40 +737,10 @@ export function MapPage({
     setSelectedLocationType,
   ] = useState<LocationType | null>(null);
 
-  const [
-    locationSearch,
-    setLocationSearch,
-  ] = useState("");
-
   const [movingLocationId, setMovingLocationId] =
     useState("");
 
   const canvasRef = useRef<HTMLDivElement>(null);
-
-  const locationEditorRef =
-    useRef<HTMLDivElement>(null);
-
-  /*
-   * When a new location is placed on the map,
-   * automatically bring its editor into view.
-   */
-  useEffect(() => {
-    if (
-      !locationEditor ||
-      !locationEditor.isNew
-    ) {
-      return;
-    }
-
-    locationEditorRef.current
-      ?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
-  }, [
-    locationEditor?.location.id,
-    locationEditor?.isNew,
-  ]);
 
   const areaStartRef = useRef<{
     x: number;
@@ -1253,9 +797,6 @@ export function MapPage({
               : [],
             locations: Array.isArray(map.locations)
               ? map.locations
-              : [],
-            paths: Array.isArray(map.paths)
-              ? map.paths
               : [],
           }))
         );
@@ -1339,18 +880,6 @@ export function MapPage({
           ...location,
         })
       ),
-
-      paths: (map.paths ?? []).map(
-        (path) => ({
-          ...path,
-          points:
-            path.points.map(
-              (point) => ({
-                ...point,
-              })
-            ),
-        })
-      ),
     };
 
     const nextStack = [
@@ -1407,7 +936,6 @@ export function MapPage({
       terrain: [],
       regions: [],
       locations: [],
-      paths: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -1951,674 +1479,6 @@ export function MapPage({
           ],
         };
       }
-    );
-  };
-
-  const fillEnclosedArea = (
-    x: number,
-    y: number
-  ) => {
-    if (
-      !activeMap ||
-      !canUseFillMode(tool)
-    ) {
-      return;
-    }
-
-    const terrainType =
-      tool as TerrainType;
-
-    const startColumn =
-      Math.max(
-        0,
-        Math.min(
-          REGION_COLUMNS - 1,
-          Math.floor(
-            (x / 100) *
-              REGION_COLUMNS
-          )
-        )
-      );
-
-    const startRow =
-      Math.max(
-        0,
-        Math.min(
-          REGION_ROWS - 1,
-          Math.floor(
-            (y / 100) *
-              REGION_ROWS
-          )
-        )
-      );
-
-    const boundary =
-      new Set<string>();
-
-    /*
-     * For Land/Water Fill we also remember
-     * which actual terrain stamps created the
-     * enclosing boundary.
-     *
-     * After a successful Fill, those outline
-     * stamps and the new interior can become
-     * one shared smoothed terrain shape.
-     */
-    const boundaryStampIds =
-      new Map<
-        string,
-        Set<string>
-      >();
-
-    /*
-     * Existing region cells of the selected
-     * terrain count as Fill boundaries.
-     *
-     * This catches Forest/Plains/etc. outlines
-     * created through the unified biome system.
-     */
-    for (
-      const region of
-      activeMap.regions ?? []
-    ) {
-      if (
-        region.terrainType !==
-        terrainType
-      ) {
-        continue;
-      }
-
-      for (
-        const key of
-        region.cells
-      ) {
-        boundary.add(key);
-      }
-    }
-
-    /*
-     * Rasterize matching terrain stamps onto
-     * the same 120 x 75 grid.
-     *
-     * This lets Freehand/Grid Land and Water
-     * strokes act as Fill boundaries too.
-     */
-    const matchingStamps =
-      activeMap.terrain.filter(
-        (stamp) =>
-          stamp.type ===
-          terrainType
-      );
-
-    for (
-      const stamp of
-      matchingStamps
-    ) {
-      const halfWidth =
-        stamp.size / 2;
-
-      const halfHeight =
-        (
-          stamp.size *
-          MAP_LOGICAL_ASPECT
-        ) / 2;
-
-      const minColumn =
-        Math.max(
-          0,
-          Math.floor(
-            (
-              (stamp.x -
-                halfWidth) /
-              100
-            ) *
-              REGION_COLUMNS
-          ) - 1
-        );
-
-      const maxColumn =
-        Math.min(
-          REGION_COLUMNS - 1,
-          Math.ceil(
-            (
-              (stamp.x +
-                halfWidth) /
-              100
-            ) *
-              REGION_COLUMNS
-          ) + 1
-        );
-
-      const minRow =
-        Math.max(
-          0,
-          Math.floor(
-            (
-              (stamp.y -
-                halfHeight) /
-              100
-            ) *
-              REGION_ROWS
-          ) - 1
-        );
-
-      const maxRow =
-        Math.min(
-          REGION_ROWS - 1,
-          Math.ceil(
-            (
-              (stamp.y +
-                halfHeight) /
-              100
-            ) *
-              REGION_ROWS
-          ) + 1
-        );
-
-      for (
-        let row = minRow;
-        row <= maxRow;
-        row += 1
-      ) {
-        for (
-          let column =
-            minColumn;
-          column <=
-            maxColumn;
-          column += 1
-        ) {
-          const cellX =
-            (
-              (column + 0.5) /
-              REGION_COLUMNS
-            ) * 100;
-
-          const cellY =
-            (
-              (row + 0.5) /
-              REGION_ROWS
-            ) * 100;
-
-          if (
-            pointInsideTerrainStamp(
-              stamp,
-              cellX,
-              cellY
-            )
-          ) {
-            const key =
-              cellKey(
-                column,
-                row
-              );
-
-            boundary.add(key);
-
-            const owners =
-              boundaryStampIds.get(
-                key
-              ) ??
-              new Set<string>();
-
-            owners.add(
-              stamp.id
-            );
-
-            boundaryStampIds.set(
-              key,
-              owners
-            );
-          }
-        }
-      }
-    }
-
-    const startKey =
-      cellKey(
-        startColumn,
-        startRow
-      );
-
-    if (
-      boundary.has(startKey)
-    ) {
-      window.alert(
-        "Click inside the outline, not directly on the outline."
-      );
-
-      return;
-    }
-
-    /*
-     * Classic four-direction flood fill.
-     *
-     * If the flood can reach any outside edge,
-     * the outline is considered open and we
-     * refuse to paint anything.
-     */
-    const visited =
-      new Set<string>();
-
-    const queue: Array<{
-      column: number;
-      row: number;
-    }> = [
-      {
-        column:
-          startColumn,
-        row:
-          startRow,
-      },
-    ];
-
-    visited.add(startKey);
-
-    let queueIndex = 0;
-    let escaped = false;
-
-    const directions = [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ];
-
-    while (
-      queueIndex <
-      queue.length
-    ) {
-      const current =
-        queue[
-          queueIndex
-        ];
-
-      queueIndex += 1;
-
-      if (
-        current.column === 0 ||
-        current.row === 0 ||
-        current.column ===
-          REGION_COLUMNS - 1 ||
-        current.row ===
-          REGION_ROWS - 1
-      ) {
-        escaped = true;
-        break;
-      }
-
-      for (
-        const [
-          columnChange,
-          rowChange,
-        ] of directions
-      ) {
-        const nextColumn =
-          current.column +
-          columnChange;
-
-        const nextRow =
-          current.row +
-          rowChange;
-
-        if (
-          nextColumn < 0 ||
-          nextColumn >=
-            REGION_COLUMNS ||
-          nextRow < 0 ||
-          nextRow >=
-            REGION_ROWS
-        ) {
-          escaped = true;
-          break;
-        }
-
-        const nextKey =
-          cellKey(
-            nextColumn,
-            nextRow
-          );
-
-        if (
-          visited.has(
-            nextKey
-          ) ||
-          boundary.has(
-            nextKey
-          )
-        ) {
-          continue;
-        }
-
-        visited.add(
-          nextKey
-        );
-
-        queue.push({
-          column:
-            nextColumn,
-          row:
-            nextRow,
-        });
-      }
-
-      if (escaped) {
-        break;
-      }
-    }
-
-    if (escaped) {
-      window.alert(
-        "That outline appears to be open. Close the gap and try Fill again."
-      );
-
-      return;
-    }
-
-    if (
-      visited.size === 0
-    ) {
-      return;
-    }
-
-    /*
-     * Determine which Land/Water stamps actually
-     * touch the filled interior.
-     *
-     * We only merge the enclosing outline, not
-     * unrelated terrain elsewhere on the map.
-     */
-    const enclosingStampIds =
-      new Set<string>();
-
-    for (
-      const key of visited
-    ) {
-      const {
-        column,
-        row,
-      } =
-        parseCellKey(key);
-
-      const neighbors = [
-        [column + 1, row],
-        [column - 1, row],
-        [column, row + 1],
-        [column, row - 1],
-      ];
-
-      for (
-        const [
-          neighborColumn,
-          neighborRow,
-        ] of neighbors
-      ) {
-        if (
-          neighborColumn < 0 ||
-          neighborColumn >=
-            REGION_COLUMNS ||
-          neighborRow < 0 ||
-          neighborRow >=
-            REGION_ROWS
-        ) {
-          continue;
-        }
-
-        const neighborKey =
-          cellKey(
-            neighborColumn,
-            neighborRow
-          );
-
-        const owners =
-          boundaryStampIds.get(
-            neighborKey
-          );
-
-        if (!owners) {
-          continue;
-        }
-
-        for (
-          const stampId of owners
-        ) {
-          enclosingStampIds.add(
-            stampId
-          );
-        }
-      }
-    }
-
-    /*
-     * If one piece of an original Freehand/Grid
-     * stroke touches the enclosed area, include
-     * that whole stroke in the merged shape.
-     */
-    const enclosingStrokeIds =
-      new Set<string>();
-
-    for (
-      const stamp of
-      matchingStamps
-    ) {
-      if (
-        enclosingStampIds.has(
-          stamp.id
-        ) &&
-        stamp.strokeId
-      ) {
-        enclosingStrokeIds.add(
-          stamp.strokeId
-        );
-      }
-    }
-
-    /*
-     * Biomes use the shared biome-cell system.
-     * They are also clipped to valid land.
-     */
-    if (
-      terrainType ===
-        "forest" ||
-      terrainType ===
-        "plains" ||
-      terrainType ===
-        "desert" ||
-      terrainType ===
-        "swamp" ||
-      terrainType ===
-        "snow"
-    ) {
-      const biomeCells =
-        Array.from(
-          visited
-        ).filter(
-          (key) => {
-            const {
-              column,
-              row,
-            } =
-              parseCellKey(
-                key
-              );
-
-            const cellX =
-              (
-                (column +
-                  0.5) /
-                REGION_COLUMNS
-              ) * 100;
-
-            const cellY =
-              (
-                (row +
-                  0.5) /
-                REGION_ROWS
-              ) * 100;
-
-            return pointIsLand(
-              activeMap,
-              cellX,
-              cellY
-            );
-          }
-        );
-
-      if (
-        biomeCells.length ===
-        0
-      ) {
-        window.alert(
-          "This biome Fill needs to be inside land."
-        );
-
-        return;
-      }
-
-      pushUndoSnapshot(
-        activeMap
-      );
-
-      paintBiomeCells(
-        biomeCells,
-        terrainType
-      );
-
-      return;
-    }
-
-    /*
-     * Land and Water are still stored as
-     * TerrainStamp records, so create one
-     * shared fill stroke in a single update.
-     *
-     * The cell dimensions match the existing
-     * 120 x 75 logical map grid.
-     */
-    const fillStrokeId =
-      crypto.randomUUID();
-
-    /*
-     * Fill cells overlap their neighbors slightly.
-     *
-     * A hand-drawn outline can pass through only
-     * part of a logical grid cell. If filled cells
-     * stop exactly at the grid edge, tiny strips of
-     * the map underneath can remain visible between
-     * the outline and the fill.
-     *
-     * This overlap seals those visual seams without
-     * changing the flood-fill boundary itself.
-     */
-    const cellSize =
-      (100 /
-        REGION_COLUMNS) *
-      1.30;
-
-    const fillStamps:
-      TerrainStamp[] =
-      Array.from(
-        visited
-      ).map(
-        (key) => {
-          const {
-            column,
-            row,
-          } =
-            parseCellKey(
-              key
-            );
-
-          return {
-            id:
-              crypto.randomUUID(),
-
-            type:
-              terrainType,
-
-            x:
-              (
-                (column +
-                  0.5) /
-                REGION_COLUMNS
-              ) * 100,
-
-            y:
-              (
-                (row +
-                  0.5) /
-                REGION_ROWS
-              ) * 100,
-
-            size:
-              cellSize,
-
-            mode:
-              "grid",
-
-            shape:
-              "square",
-
-            strokeId:
-              fillStrokeId,
-
-            terrainStyle:
-              terrainStyles[
-                terrainType
-              ],
-
-            smoothed: true,
-          };
-        }
-      );
-
-    pushUndoSnapshot(
-      activeMap
-    );
-
-    updateMap(
-      activeMap.id,
-      (map) => ({
-        ...map,
-
-        terrain: [
-          ...map.terrain.map(
-            (stamp) => {
-              const belongsToOutline =
-                enclosingStampIds.has(
-                  stamp.id
-                ) ||
-                Boolean(
-                  stamp.strokeId &&
-                  enclosingStrokeIds.has(
-                    stamp.strokeId
-                  )
-                );
-
-              if (
-                !belongsToOutline
-              ) {
-                return stamp;
-              }
-
-              return {
-                ...stamp,
-
-                /*
-                 * The outline and its filled
-                 * interior now render through
-                 * one shared SVG smoothing mask.
-                 */
-                strokeId:
-                  fillStrokeId,
-
-                smoothed: true,
-              };
-            }
-          ),
-
-          ...fillStamps,
-        ],
-      })
     );
   };
 
@@ -3374,103 +2234,6 @@ export function MapPage({
     const point = canvasPoint(event);
 
     if (
-      tool === "river" ||
-      tool === "road"
-    ) {
-      const kind:
-        MapPathKind =
-        tool;
-
-      setPathDraft(
-        (old) => {
-          if (
-            !old ||
-            old.kind !== kind
-          ) {
-            return {
-              id:
-                crypto.randomUUID(),
-
-              kind,
-
-              width:
-                pathWidth,
-
-              roadStyle:
-                kind === "road"
-                  ? roadStyle
-                  : undefined,
-
-              points: [
-                {
-                  x: point.x,
-                  y: point.y,
-                },
-              ],
-
-              createdAt:
-                new Date()
-                  .toISOString(),
-            };
-          }
-
-          const lastPoint =
-            old.points[
-              old.points.length -
-                1
-            ];
-
-          if (
-            lastPoint &&
-            Math.hypot(
-              point.x -
-                lastPoint.x,
-              point.y -
-                lastPoint.y
-            ) < 0.15
-          ) {
-            return old;
-          }
-
-          return {
-            ...old,
-
-            width:
-              pathWidth,
-
-            points: [
-              ...old.points,
-              {
-                x: point.x,
-                y: point.y,
-
-                curveFromPrevious:
-                  pathSegmentMode ===
-                  "curve",
-              },
-            ],
-          };
-        }
-      );
-
-      setPathHoverPoint(null);
-
-      return;
-    }
-
-    if (
-      drawMode === "fill" &&
-      canUseFillMode(tool)
-    ) {
-      fillEnclosedArea(
-        point.x,
-        point.y
-      );
-
-      return;
-    }
-
-    if (
       drawMode === "area" &&
       canUseAreaMode(tool)
     ) {
@@ -3520,7 +2283,6 @@ export function MapPage({
           y: point.y,
 
           description: "",
-          size: "small",
         },
       });
 
@@ -3603,25 +2365,6 @@ export function MapPage({
       return;
     }
 
-    if (
-      (
-        tool === "river" ||
-        tool === "road"
-      ) &&
-      pathDraft &&
-      pathDraft.points.length > 0
-    ) {
-      const point =
-        canvasPoint(event);
-
-      setPathHoverPoint({
-        x: point.x,
-        y: point.y,
-      });
-
-      return;
-    }
-
     if (!paintingRef.current) return;
 
     const point = canvasPoint(event);
@@ -3650,49 +2393,6 @@ export function MapPage({
     paintingRef.current = false;
     lastPaintRef.current = null;
     currentStrokeIdRef.current = "";
-  };
-
-  const finishPath = () => {
-    if (
-      !activeMap ||
-      !pathDraft ||
-      pathDraft.points.length < 2
-    ) {
-      return;
-    }
-
-    pushUndoSnapshot(activeMap);
-
-    const finishedPath: MapPath = {
-      ...pathDraft,
-      width: pathWidth,
-      points:
-        pathDraft.points.map(
-          (point) => ({
-            ...point,
-          })
-        ),
-    };
-
-    updateMap(
-      activeMap.id,
-      (map) => ({
-        ...map,
-
-        paths: [
-          ...(map.paths ?? []),
-          finishedPath,
-        ],
-      })
-    );
-
-    setPathDraft(null);
-    setPathHoverPoint(null);
-  };
-
-  const cancelPath = () => {
-    setPathDraft(null);
-    setPathHoverPoint(null);
   };
 
   const smoothLastAction = () => {
@@ -3789,19 +2489,6 @@ export function MapPage({
                   })
                 ),
 
-              paths:
-                snapshot.paths.map(
-                  (path) => ({
-                    ...path,
-                    points:
-                      path.points.map(
-                        (point) => ({
-                          ...point,
-                        })
-                      ),
-                  })
-                ),
-
               updatedAt:
                 new Date().toISOString(),
             }
@@ -3817,7 +2504,6 @@ export function MapPage({
     if (tool === "location") {
       setTool("select");
       setSelectedLocationType(null);
-      setLocationSearch("");
       setLocationEditor(null);
       setPlacingLocation(false);
       setMovingLocationId("");
@@ -3826,46 +2512,10 @@ export function MapPage({
 
     setTool("location");
     setSelectedLocationType(null);
-    setLocationSearch("");
     setLocationEditor(null);
     setMovingLocationId("");
     setPlacingLocation(false);
-  };
-
-  const chooseLocationSearchValue = (
-    value: string
-  ) => {
-    setLocationSearch(value);
-
-    const search =
-      value
-        .trim()
-        .toLowerCase();
-
-    if (!search) {
-      return;
-    }
-
-    const matchedType =
-      LOCATION_PALETTE_TYPES.find(
-        (type) =>
-          type.toLowerCase() === search ||
-          LOCATION_LABELS[type]
-            .toLowerCase() === search
-      );
-
-    if (!matchedType) {
-      return;
-    }
-
-    setSelectedLocationType(
-      matchedType
-    );
-
-    setLocationSearch("");
-    setLocationEditor(null);
-    setPlacingLocation(true);
-  };
+  };;
 
   const saveNewLocation = () => {
     if (
@@ -4143,17 +2793,6 @@ export function MapPage({
                 }
 
                 setTool(item.key);
-
-                if (
-                  drawMode === "path"
-                ) {
-                  setDrawMode(
-                    "freehand"
-                  );
-                }
-
-                setPathDraft(null);
-                setPathHoverPoint(null);
                 setLocationEditor(null);
                 setPlacingLocation(false);
                 setMovingLocationId("");
@@ -4197,83 +2836,6 @@ export function MapPage({
           <button
             type="button"
             className={
-              tool === "river"
-                ? "btn btn-primary"
-                : "btn btn-secondary"
-            }
-            onClick={() => {
-              if (
-                tool === "river"
-              ) {
-                cancelPath();
-                setTool("select");
-                setDrawMode(
-                  "freehand"
-                );
-                return;
-              }
-
-              cancelPath();
-              setTool("river");
-              setDrawMode("path");
-              setPathWidth(1.2);
-              setPathSegmentMode(
-                "curve"
-              );
-              setLocationEditor(null);
-              setPlacingLocation(false);
-              setMovingLocationId("");
-            }}
-          >
-            ≈ River
-          </button>
-
-          <button
-            type="button"
-            className={
-              tool === "road"
-                ? "btn btn-primary"
-                : "btn btn-secondary"
-            }
-            onClick={() => {
-              if (
-                tool === "road"
-              ) {
-                cancelPath();
-                setTool("select");
-                setDrawMode(
-                  "freehand"
-                );
-                return;
-              }
-
-              cancelPath();
-              setTool("road");
-              setDrawMode("path");
-
-              /*
-               * Old-timey pathways should read
-               * like map routes, not highways.
-               */
-              setRoadStyle(
-                "pathway"
-              );
-              setPathWidth(0.28);
-
-              setPathSegmentMode(
-                "straight"
-              );
-              setLocationEditor(null);
-              setPlacingLocation(false);
-              setMovingLocationId("");
-            }}
-          >
-            ╍ Road
-          </button>
-
-          <button
-            type="button"
-            className={
               tool === "erase"
                 ? "btn btn-primary"
                 : "btn btn-secondary"
@@ -4298,238 +2860,66 @@ export function MapPage({
 
 
 
-          <div className="sf-map-location-picker-wrap-v3">
-            <button
-              type="button"
-              className={
-                tool === "location"
-                  ? "btn btn-primary"
-                  : "btn btn-secondary"
-              }
-              onClick={addLocation}
-            >
-              📍 Location
-              {tool === "location"
-                ? " ▴"
-                : " ▾"}
-            </button>
+          <button
+            type="button"
+            className={
+              tool === "location"
+                ? "btn btn-primary"
+                : "btn btn-secondary"
+            }
+            onClick={addLocation}
+          >
+            📍 Location
+          </button>
 
-            {tool === "location" &&
-              !placingLocation &&
-              !locationEditor &&
-              !movingLocationId && (
-                <div className="sf-map-location-picker-v3">
-                  <input
-                    className="form-input sf-map-location-search-v3"
-                    type="search"
-                    list="sf-map-location-types-v3"
-                    value={locationSearch}
-                    onChange={(event) =>
-                      chooseLocationSearchValue(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Search city, town, camp..."
-                    autoFocus
-                  />
+          {tool === "location" &&
+            !movingLocationId && (
+              <>
+                {LOCATION_PALETTE_TYPES.map(
+                  (type) => (
+                    <button
+                      key={
+                        `location-${type}`
+                      }
+                      type="button"
+                      className={
+                        selectedLocationType ===
+                        type
+                          ? "btn btn-primary"
+                          : "btn btn-secondary"
+                      }
+                      onClick={() => {
+                        setSelectedLocationType(
+                          type
+                        );
 
-                  <datalist id="sf-map-location-types-v3">
-                    {LOCATION_PALETTE_TYPES.map(
-                      (type) => (
-                        <option
-                          key={
-                            `location-${type}`
-                          }
-                          value={
-                            LOCATION_LABELS[
-                              type
-                            ]
-                          }
-                        />
-                      )
-                    )}
-                  </datalist>
-                </div>
-              )}
-          </div>
+                        setLocationEditor(
+                          null
+                        );
+
+                        setPlacingLocation(
+                          true
+                        );
+                      }}
+                    >
+                      {
+                        LOCATION_ICONS[
+                          type
+                        ]
+                      }{" "}
+                      {
+                        LOCATION_LABELS[
+                          type
+                        ]
+                      }
+                    </button>
+                  )
+                )}
+              </>
+            )}
         </div>
 
         <div className="sf-map-toolbar-group-v2">
-          {(
-            tool === "river" ||
-            tool === "road"
-          ) && (
-            <>
-              {tool === "road" && (
-                <label className="sf-map-brush-control-v2">
-                  Road Type
-
-                  <select
-                    value={roadStyle}
-                    onChange={(event) => {
-                      const nextStyle =
-                        event.target
-                          .value as RoadStyle;
-
-                      setRoadStyle(
-                        nextStyle
-                      );
-
-                      const defaultWidth =
-                        nextStyle ===
-                        "pathway"
-                          ? 0.28
-                          : nextStyle ===
-                              "dirt"
-                            ? 0.38
-                            : 0.45;
-
-                      setPathWidth(
-                        defaultWidth
-                      );
-
-                      setPathDraft(
-                        (old) =>
-                          old
-                            ? {
-                                ...old,
-                                roadStyle:
-                                  nextStyle,
-                                width:
-                                  defaultWidth,
-                              }
-                            : old
-                      );
-                    }}
-                  >
-                    {ROAD_STYLE_OPTIONS.map(
-                      (option) => (
-                        <option
-                          key={
-                            option.value
-                          }
-                          value={
-                            option.value
-                          }
-                        >
-                          {
-                            option.label
-                          }
-                        </option>
-                      )
-                    )}
-                  </select>
-                </label>
-              )}
-
-              <label className="sf-map-brush-control-v2">
-                Width
-
-                <input
-                  type="range"
-                  min={
-                    tool === "river"
-                      ? "0.5"
-                      : "0.15"
-                  }
-                  max={
-                    tool === "river"
-                      ? "3"
-                      : "1"
-                  }
-                  step={
-                    tool === "river"
-                      ? "0.1"
-                      : "0.05"
-                  }
-                  value={pathWidth}
-                  onChange={(event) => {
-                    const nextWidth =
-                      Number(
-                        event.target
-                          .value
-                      );
-
-                    setPathWidth(
-                      nextWidth
-                    );
-
-                    setPathDraft(
-                      (old) =>
-                        old
-                          ? {
-                              ...old,
-                              width:
-                                nextWidth,
-                            }
-                          : old
-                    );
-                  }}
-                />
-
-                <span>
-                  {pathWidth.toFixed(1)}
-                </span>
-              </label>
-
-              <button
-                type="button"
-                className={
-                  pathSegmentMode ===
-                  "straight"
-                    ? "btn btn-primary"
-                    : "btn btn-secondary"
-                }
-                onClick={() =>
-                  setPathSegmentMode(
-                    "straight"
-                  )
-                }
-              >
-                ━ Straight
-              </button>
-
-              <button
-                type="button"
-                className={
-                  pathSegmentMode ===
-                  "curve"
-                    ? "btn btn-primary"
-                    : "btn btn-secondary"
-                }
-                onClick={() =>
-                  setPathSegmentMode(
-                    "curve"
-                  )
-                }
-              >
-                ⌒ Curve
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={
-                  !pathDraft ||
-                  pathDraft.points
-                    .length < 2
-                }
-                onClick={finishPath}
-              >
-                ✓ Finish
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={!pathDraft}
-                onClick={cancelPath}
-              >
-                Cancel
-              </button>
-            </>
-          )}
-
           {isTerrainTool(tool) &&
             TERRAIN_STYLE_OPTIONS[tool].length > 1 && (
               <label className="sf-map-brush-control-v2 sf-map-terrain-style-v1">
@@ -4609,32 +2999,6 @@ export function MapPage({
             }
           >
             ▭ Area
-          </button>
-
-          <button
-            type="button"
-            className={
-              drawMode === "fill"
-                ? "btn btn-primary"
-                : "btn btn-secondary"
-            }
-            disabled={
-              !canUseFillMode(tool)
-            }
-            title={
-              canUseFillMode(tool)
-                ? "Click inside a closed outline of the selected terrain to fill it."
-                : "Fill works with Land, Water, Forest, Plains, Desert, Swamp, and Snow."
-            }
-            onClick={() =>
-              setDrawMode(
-                drawMode === "fill"
-                  ? "freehand"
-                  : "fill"
-              )
-            }
-          >
-            ▣ Fill
           </button>
 
           {drawMode === "area" &&
@@ -4942,239 +3306,6 @@ export function MapPage({
           onPointerCancel={stopPainting}
           onPointerLeave={stopPainting}
         >
-          <svg
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              overflow: "visible",
-              pointerEvents: "none",
-              zIndex: 4,
-            }}
-          >
-            {(activeMap.paths ?? []).map(
-              (mapPath) => {
-                const d =
-                  buildMapPathD(
-                    mapPath.kind,
-                    mapPath.points
-                  );
-
-                const roadVisual =
-                  roadVisualForStyle(
-                    mapPath.roadStyle
-                  );
-
-                const mainColor =
-                  mapPath.kind ===
-                  "river"
-                    ? activeMap
-                        .colors.water
-                    : roadVisual.main;
-
-                const edgeColor =
-                  mapPath.kind ===
-                  "river"
-                    ? "#335f78"
-                    : roadVisual.edge;
-
-                const dashArray =
-                  mapPath.kind ===
-                  "river"
-                    ? undefined
-                    : roadVisual
-                        .dashArray;
-
-                const edgeExtra =
-                  mapPath.kind ===
-                  "river"
-                    ? 0.55
-                    : roadVisual
-                        .edgeExtra;
-
-                return (
-                  <g
-                    key={mapPath.id}
-                  >
-                    <path
-                      d={d}
-                      fill="none"
-                      stroke={
-                        edgeColor
-                      }
-                      strokeWidth={
-                        mapPath.width +
-                        edgeExtra
-                      }
-                      strokeDasharray={
-                        dashArray
-                      }
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-
-                    <path
-                      d={d}
-                      fill="none"
-                      stroke={
-                        mainColor
-                      }
-                      strokeWidth={
-                        mapPath.width
-                      }
-                      strokeDasharray={
-                        dashArray
-                      }
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </g>
-                );
-              }
-            )}
-
-            {pathDraft && (
-              <g opacity="0.82">
-                {(() => {
-                  const previewPoints =
-                    pathHoverPoint
-                      ? [
-                          ...pathDraft
-                            .points,
-                          {
-                            x:
-                              pathHoverPoint
-                                .x,
-
-                            y:
-                              pathHoverPoint
-                                .y,
-
-                            curveFromPrevious:
-                              pathSegmentMode ===
-                              "curve",
-                          },
-                        ]
-                      : pathDraft
-                          .points;
-
-                  const d =
-                    buildMapPathD(
-                      pathDraft.kind,
-                      previewPoints
-                    );
-
-                  const roadVisual =
-                    roadVisualForStyle(
-                      pathDraft.roadStyle ??
-                        roadStyle
-                    );
-
-                  const mainColor =
-                    pathDraft.kind ===
-                    "river"
-                      ? activeMap
-                          .colors.water
-                      : roadVisual.main;
-
-                  const edgeColor =
-                    pathDraft.kind ===
-                    "river"
-                      ? "#335f78"
-                      : roadVisual.edge;
-
-                  const dashArray =
-                    pathDraft.kind ===
-                    "river"
-                      ? undefined
-                      : roadVisual
-                          .dashArray;
-
-                  const edgeExtra =
-                    pathDraft.kind ===
-                    "river"
-                      ? 0.55
-                      : roadVisual
-                          .edgeExtra;
-
-                  return (
-                    <>
-                      <path
-                        d={d}
-                        fill="none"
-                        stroke={
-                          edgeColor
-                        }
-                        strokeWidth={
-                          pathWidth +
-                          edgeExtra
-                        }
-                        strokeDasharray={
-                          dashArray
-                        }
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-
-                      <path
-                        d={d}
-                        fill="none"
-                        stroke={
-                          mainColor
-                        }
-                        strokeWidth={
-                          pathWidth
-                        }
-                        strokeDasharray={
-                          dashArray
-                        }
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </>
-                  );
-                })()}
-
-                {pathDraft.points.map(
-                  (
-                    point,
-                    index
-                  ) => (
-                    <circle
-                      key={
-                        `path-point-${index}`
-                      }
-                      cx={point.x}
-                      cy={point.y}
-                      r="0.45"
-                      fill="#ffffff"
-                      stroke="#111827"
-                      strokeWidth="0.18"
-                    />
-                  )
-                )}
-              </g>
-            )}
-          </svg>
-
-          {(
-            tool === "river" ||
-            tool === "road"
-          ) && (
-            <div className="sf-map-canvas-message-v2">
-              {!pathDraft
-                ? `Click the map to start a ${tool}.`
-                : pathDraft.points
-                    .length < 2
-                  ? "Click another point to create the first segment."
-                  : `Add more points, choose Straight or Curve for the next segment, then press Finish.`}
-            </div>
-          )}
-
           {areaPreview && (
             <div
               className="sf-map-area-preview-v1"
@@ -5999,54 +4130,6 @@ export function MapPage({
             );
           })()}
 
-          {locationEditor?.isNew && (
-            <div
-              className="sf-map-marker-v2"
-              aria-hidden="true"
-              style={{
-                left:
-                  `${locationEditor.location.x}%`,
-
-                top:
-                  `${locationEditor.location.y}%`,
-
-                zIndex: 6,
-
-                color:
-                  activeMap.colors.label,
-
-                opacity: 0.72,
-
-                pointerEvents: "none",
-              }}
-            >
-              <span className="sf-map-marker-label-v2">
-                {
-                  locationEditor.location
-                    .name.trim() ||
-                  LOCATION_LABELS[
-                    locationEditor.location
-                      .type
-                  ]
-                }
-              </span>
-
-              <span
-                className={[
-                  "sf-map-marker-symbol-v3",
-                  `sf-map-marker-size-${
-                    locationEditor.location
-                      .size ?? "small"
-                  }-v3`,
-                ].join(" ")}
-              >
-                {locationMapSymbol(
-                  locationEditor.location.type
-                )}
-              </span>
-            </div>
-          )}
-
           {activeMap.locations.map(
             (location) => (
               <button
@@ -6057,19 +4140,6 @@ export function MapPage({
                   left: `${location.x}%`,
                   top: `${location.y}%`,
                   zIndex: 5,
-
-                  /*
-                   * Roads and rivers must be able
-                   * to terminate directly at a
-                   * settlement without the marker
-                   * stealing the map click.
-                   */
-                  pointerEvents:
-                    tool === "river" ||
-                    tool === "road"
-                      ? "none"
-                      : "auto",
-
                   color:
                     activeMap.colors.label,
                 }}
@@ -6093,22 +4163,12 @@ export function MapPage({
                   });
                 }}
               >
-                <span className="sf-map-marker-label-v2">
-                  {location.name}
+                <span className="sf-map-marker-icon-v2">
+                  {location.icon}
                 </span>
 
-                <span
-                  className={[
-                    "sf-map-marker-symbol-v3",
-                    `sf-map-marker-size-${
-                      location.size ??
-                      "small"
-                    }-v3`,
-                  ].join(" ")}
-                >
-                  {locationMapSymbol(
-                    location.type
-                  )}
+                <span className="sf-map-marker-label-v2">
+                  {location.name}
                 </span>
               </button>
             )
@@ -6157,10 +4217,7 @@ export function MapPage({
       </div>
 
       {locationEditor && (
-        <div
-          ref={locationEditorRef}
-          className="card sf-map-location-editor-v2"
-        >
+        <div className="card sf-map-location-editor-v2">
           <div className="sf-map-location-editor-title-v2">
             <h3>
               {locationEditor.isNew
@@ -6236,52 +4293,31 @@ export function MapPage({
                     key={type}
                     value={type}
                   >
-                    {
-                      LOCATION_LABELS[type]
-                    }
+                    {title(type)}
                   </option>
                 ))}
               </select>
             </label>
 
             <label>
-              Map Size
+              Icon
 
-              <select
+              <input
                 className="form-input"
                 value={
-                  locationEditor.location
-                    .size ?? "small"
+                  locationEditor.location.icon
                 }
                 onChange={(event) =>
                   setLocationEditor({
                     ...locationEditor,
                     location: {
                       ...locationEditor.location,
-                      size:
-                        event.target
-                          .value as LocationSize,
+                      icon: event.target.value,
                     },
                   })
                 }
-              >
-                {(
-                  Object.keys(
-                    LOCATION_SIZE_LABELS
-                  ) as LocationSize[]
-                ).map((size) => (
-                  <option
-                    key={size}
-                    value={size}
-                  >
-                    {
-                      LOCATION_SIZE_LABELS[
-                        size
-                      ]
-                    }
-                  </option>
-                ))}
-              </select>
+                maxLength={8}
+              />
             </label>
           </div>
 

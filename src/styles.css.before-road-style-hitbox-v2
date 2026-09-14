@@ -600,9 +600,7 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  width: max-content;
-  height: max-content;
+  gap: 2px;
 }
 
 .sf-map-marker-icon-v2 {
@@ -645,8 +643,8 @@ button {
 
 .sf-map-marker-label-v2 {
   display: block;
-  margin-bottom: 1px;
-  padding: 1px 3px;
+  margin-bottom: 2px;
+  padding: 2px 5px;
   border-radius: 5px;
   background: rgb(255 255 255 / 76%);
   color: #111827;

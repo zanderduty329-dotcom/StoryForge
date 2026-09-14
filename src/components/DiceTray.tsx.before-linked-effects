@@ -134,7 +134,6 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
   const [actorKey, setActorKey] = useState("");
   const [opponentKey, setOpponentKey] = useState("");
   const [sourceId, setSourceId] = useState("");
-  const [effectId, setEffectId] = useState("");
   const [statKey, setStatKey] = useState<StatKey | "none">("none");
   const [formula, setFormula] = useState("1d20");
   const [mode, setMode] = useState<RollMode>("normal");
@@ -147,26 +146,8 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
   const [storageError, setStorageError] = useState("");
   const actor = archive.actors.find((item) => item.key === actorKey);
   const opponent = archive.actors.find((item) => item.key === opponentKey);
-  const action = (purpose === "attack" || purpose === "damage")
-    ? actor?.actions.find((item) => item.id === sourceId)
-    : undefined;
-
-  const primaryActions =
-    actor?.actions.filter((item) => !item.source.attackId) ?? [];
-
-  const linkedEffects =
-    sourceId
-      ? actor?.actions.filter((item) => item.source.attackId === sourceId) ?? []
-      : [];
-
-  const effectAction =
-    purpose === "damage" && effectId
-      ? linkedEffects.find((item) => item.id === effectId)
-      : undefined;
-
-  const save = purpose === "save"
-    ? opponent?.saves.find((item) => item.id === sourceId)
-    : undefined;
+  const action = (purpose === "attack" || purpose === "damage") ? actor?.actions.find((item) => item.id === sourceId) : undefined;
+  const save = purpose === "save" ? opponent?.saves.find((item) => item.id === sourceId) : undefined;
   const score = statKey === "none" ? undefined : actor?.stats[statKey];
   const statBonus = score === undefined ? undefined : statModifier(score);
 
@@ -182,12 +163,12 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
   }, [worldId]);
 
   function changePurpose(value: RollPurpose) {
-    setPurpose(value); setSourceId(""); setEffectId(""); setStatKey("none"); setDC("");
+    setPurpose(value); setSourceId(""); setStatKey("none"); setDC("");
     setFormula(value === "damage" ? "1d6" : "1d20"); setMode("normal"); setError("");
   }
 
   function chooseSource(value: string) {
-    setSourceId(value); setEffectId(""); setError("");
+    setSourceId(value); setError("");
     if (purpose === "save") {
       const selected = opponent?.saves.find((item) => item.id === value);
       setStatKey(selected?.stat ?? "none");
@@ -200,35 +181,19 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
     }
   }
 
-  function chooseEffect(value: string) {
-    setEffectId(value);
-    setError("");
-
-    const selected = linkedEffects.find((item) => item.id === value);
-
-    if (selected) {
-      setFormula(selected.formula || "1d4");
-    } else if (action) {
-      setFormula(action.formula || "1d6");
-    }
-
-    setMode("normal");
-  }
-
   function performRoll() {
     setError("");
     try {
       if (actorKey && !actor) throw new Error("Select a current character or creature to roll as.");
       if (opponentKey && !opponent) throw new Error("Select a current target or source creature.");
       if (sourceId && !action && !save) throw new Error("The saved action changed. Select it again.");
-      if (effectId && !effectAction) throw new Error("The linked effect changed. Select it again.");
       if (statKey !== "none" && score === undefined) throw new Error("Select a saved character or creature with a valid score for this stat.");
       const requestStat = statKey !== "none" && score !== undefined ? { key: statKey, score } : undefined;
       const adjustments = [{ label: "Situational / DM adjustment", value: adjustment.trim() === "" ? 0 : Number(adjustment) }];
       if (purpose === "attack" && action) adjustments.unshift({ label: `${action.name} attack bonus`, value: action.bonus });
       const rolled = rollDice({
         formula, mode, purpose, worldId, actor: actor?.ref, opponent: opponent?.ref,
-        source: effectAction?.source ?? save?.source ?? action?.source, stat: requestStat, adjustments,
+        source: save?.source ?? action?.source, stat: requestStat, adjustments,
         dc: dc.trim() === "" ? undefined : Number(dc), note: note.trim() || undefined,
       });
       setResult(rolled);
@@ -277,14 +242,9 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
         </select></label>
       </div>
 
-      {(purpose === "attack" || purpose === "damage") && primaryActions.length > 0 && <label className="sf-dice-full-label">Saved attack or item<select value={sourceId} onChange={(event) => chooseSource(event.target.value)}>
+      {(purpose === "attack" || purpose === "damage") && !!actor?.actions.length && <label className="sf-dice-full-label">Saved attack or item<select value={sourceId} onChange={(event) => chooseSource(event.target.value)}>
         <option value="">Custom roll</option>
-        {primaryActions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-      </select></label>}
-
-      {purpose === "damage" && action && linkedEffects.length > 0 && <label className="sf-dice-full-label">Linked effect<select value={effectId} onChange={(event) => chooseEffect(event.target.value)}>
-        <option value="">Main damage · {action.formula || "No saved dice"}</option>
-        {linkedEffects.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.formula || "No dice"}</option>)}
+        {actor.actions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select></label>}
       {purpose === "save" && !!opponent?.saves.length && <label className="sf-dice-full-label">Saved attack effect<select value={sourceId} onChange={(event) => chooseSource(event.target.value)}>
         <option value="">Custom saving throw</option>
