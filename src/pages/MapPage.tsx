@@ -42,7 +42,9 @@ type EditorTool =
 
 type EraseTarget =
   | TerrainType
-  | "region";
+  | "region"
+  | "river"
+  | "road";
 
 type MapColors = {
   water: string;
@@ -66,6 +68,8 @@ type TerrainStamp = {
   strokeId?: string;
   terrainStyle?: string;
   smoothed?: boolean;
+
+  fillGenerated?: boolean;
 };
 
 type RegionKind =
@@ -482,6 +486,30 @@ const TERRAIN_TOOLS: Array<{
   { key: "swamp", label: "Swamp", icon: "🌿" },
   { key: "snow", label: "Snow", icon: "❄️" },
 ];
+
+const BASE_TERRAIN_TOOLS =
+  TERRAIN_TOOLS.filter(
+    (item) =>
+      item.key === "land" ||
+      item.key === "water"
+  );
+
+const BIOME_TOOLS =
+  TERRAIN_TOOLS.filter(
+    (item) =>
+      item.key === "forest" ||
+      item.key === "plains" ||
+      item.key === "desert" ||
+      item.key === "swamp" ||
+      item.key === "snow"
+  );
+
+const FEATURE_TERRAIN_TOOLS =
+  TERRAIN_TOOLS.filter(
+    (item) =>
+      item.key === "mountain"
+  );
+
 
 const TERRAIN_STYLE_OPTIONS: Record<
   TerrainType,
@@ -924,6 +952,167 @@ function roadVisualForStyle(
   }
 }
 
+function curveGeometryForSegment(
+  kind: MapPathKind,
+  previous: MapPathPoint,
+  current: MapPathPoint,
+  index: number
+) {
+  const dx =
+    current.x - previous.x;
+
+  const dy =
+    current.y - previous.y;
+
+  const distance =
+    Math.max(
+      0.001,
+      Math.sqrt(
+        dx * dx +
+        dy * dy
+      )
+    );
+
+  const tangentX =
+    dx / distance;
+
+  const tangentY =
+    dy / distance;
+
+  const perpendicularX =
+    -tangentY;
+
+  const perpendicularY =
+    tangentX;
+
+  /*
+   * Produce deterministic variation from the
+   * segment itself. Saved paths therefore keep
+   * the same shape every time they are rendered.
+   */
+  const rawSeed =
+    Math.sin(
+      previous.x * 12.9898 +
+      previous.y * 78.233 +
+      current.x * 37.719 +
+      current.y * 11.131 +
+      index * 19.19
+    ) * 43758.5453;
+
+  const seed =
+    rawSeed -
+    Math.floor(rawSeed);
+
+  const rawSeedTwo =
+    Math.sin(
+      previous.x * 31.417 +
+      previous.y * 17.733 +
+      current.x * 53.119 +
+      current.y * 29.971 +
+      index * 7.77
+    ) * 24634.6345;
+
+  const seedTwo =
+    rawSeedTwo -
+    Math.floor(rawSeedTwo);
+
+  const rawSeedThree =
+    Math.sin(
+      previous.x * 9.173 +
+      previous.y * 41.927 +
+      current.x * 21.311 +
+      current.y * 67.113 +
+      index * 13.37
+    ) * 19341.173;
+
+  const seedThree =
+    rawSeedThree -
+    Math.floor(rawSeedThree);
+
+  const firstDirection =
+    seed < 0.5
+      ? -1
+      : 1;
+
+  /*
+   * Most curved segments gently reverse their
+   * bend, creating an S-like natural route.
+   * Some remain a softer uneven single bend.
+   */
+  const secondDirection =
+    seedThree < 0.62
+      ? -firstDirection
+      : firstDirection;
+
+  const baseBendStrength =
+    kind === "river"
+      ? Math.min(
+          4.2,
+          distance * 0.18
+        )
+      : Math.min(
+          2.25,
+          distance * 0.10
+        );
+
+  const firstBendStrength =
+    baseBendStrength *
+    (
+      0.72 +
+      seedTwo * 0.52
+    );
+
+  const secondBendStrength =
+    baseBendStrength *
+    (
+      secondDirection ===
+      firstDirection
+        ? 0.38 +
+          seedThree * 0.28
+        : 0.55 +
+          seedThree * 0.55
+    );
+
+  return {
+    control1X:
+      previous.x +
+      tangentX *
+        distance *
+        0.32 +
+      perpendicularX *
+        firstBendStrength *
+        firstDirection,
+
+    control1Y:
+      previous.y +
+      tangentY *
+        distance *
+        0.32 +
+      perpendicularY *
+        firstBendStrength *
+        firstDirection,
+
+    control2X:
+      previous.x +
+      tangentX *
+        distance *
+        0.68 +
+      perpendicularX *
+        secondBendStrength *
+        secondDirection,
+
+    control2Y:
+      previous.y +
+      tangentY *
+        distance *
+        0.68 +
+      perpendicularY *
+        secondBendStrength *
+        secondDirection,
+  };
+}
+
+
 function buildMapPathD(
   kind: MapPathKind,
   points: MapPathPoint[]
@@ -955,6 +1144,57 @@ function buildMapPathD(
       continue;
     }
 
+    const curve =
+      curveGeometryForSegment(
+        kind,
+        previous,
+        current,
+        index
+      );
+
+    d +=
+      ` C ${curve.control1X} ${curve.control1Y}` +
+      ` ${curve.control2X} ${curve.control2Y}` +
+      ` ${current.x} ${current.y}`;
+  }
+
+  return d;
+}
+
+
+function sampleMapPath(
+  mapPath: MapPath
+) {
+  if (
+    mapPath.points.length === 0
+  ) {
+    return [] as Array<{
+      x: number;
+      y: number;
+    }>;
+  }
+
+  const sampled: Array<{
+    x: number;
+    y: number;
+  }> = [
+    {
+      x: mapPath.points[0].x,
+      y: mapPath.points[0].y,
+    },
+  ];
+
+  for (
+    let index = 1;
+    index < mapPath.points.length;
+    index += 1
+  ) {
+    const previous =
+      mapPath.points[index - 1];
+
+    const current =
+      mapPath.points[index];
+
     const dx =
       current.x -
       previous.x;
@@ -972,62 +1212,181 @@ function buildMapPathD(
         )
       );
 
-    const midpointX =
-      (
-        previous.x +
-        current.x
-      ) / 2;
-
-    const midpointY =
-      (
-        previous.y +
-        current.y
-      ) / 2;
-
     /*
-     * A small alternating bend keeps River/Road
-     * paths natural while remaining deterministic.
+     * Sample often enough that erase and
+     * selection follow the visible curve.
      */
-    const bendDirection =
-      index % 2 === 0
-        ? -1
-        : 1;
+    const steps =
+      Math.max(
+        1,
+        Math.ceil(
+          distance / 0.20
+        )
+      );
 
-    const bendStrength =
-      kind === "river"
-        ? Math.min(
-            3.4,
-            distance * 0.15
-          )
-        : Math.min(
-            1.9,
-            distance * 0.08
-          );
+    if (
+      current.curveFromPrevious
+    ) {
+      const curve =
+        curveGeometryForSegment(
+          mapPath.kind,
+          previous,
+          current,
+          index
+        );
 
-    const perpendicularX =
-      -dy / distance;
+      for (
+        let step = 1;
+        step <= steps;
+        step += 1
+      ) {
+        const t =
+          step / steps;
 
-    const perpendicularY =
-      dx / distance;
+        const inverse =
+          1 - t;
 
-    const controlX =
-      midpointX +
-      perpendicularX *
-        bendStrength *
-        bendDirection;
+        sampled.push({
+          x:
+            inverse *
+              inverse *
+              inverse *
+              previous.x +
+            3 *
+              inverse *
+              inverse *
+              t *
+              curve.control1X +
+            3 *
+              inverse *
+              t *
+              t *
+              curve.control2X +
+            t *
+              t *
+              t *
+              current.x,
 
-    const controlY =
-      midpointY +
-      perpendicularY *
-        bendStrength *
-        bendDirection;
+          y:
+            inverse *
+              inverse *
+              inverse *
+              previous.y +
+            3 *
+              inverse *
+              inverse *
+              t *
+              curve.control1Y +
+            3 *
+              inverse *
+              t *
+              t *
+              curve.control2Y +
+            t *
+              t *
+              t *
+              current.y,
+        });
+      }
 
-    d +=
-      ` Q ${controlX} ${controlY} ${current.x} ${current.y}`;
+      continue;
+    }
+
+    for (
+      let step = 1;
+      step <= steps;
+      step += 1
+    ) {
+      const t =
+        step / steps;
+
+      sampled.push({
+        x:
+          previous.x +
+          dx * t,
+
+        y:
+          previous.y +
+          dy * t,
+      });
+    }
   }
 
-  return d;
+  return sampled;
 }
+
+function mapPathTouchesPoint(
+  mapPath: MapPath,
+  x: number,
+  y: number,
+  radius: number
+) {
+  const hitRadius =
+    radius +
+    Math.max(
+      0.15,
+      mapPath.width / 2
+    );
+
+  return sampleMapPath(
+    mapPath
+  ).some((point) => {
+    const dx =
+      point.x - x;
+
+    const dy =
+      point.y - y;
+
+    return (
+      Math.sqrt(
+        dx * dx +
+        dy * dy
+      ) <= hitRadius
+    );
+  });
+}
+
+
+function mapPathTouchesArea(
+  mapPath: MapPath,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+) {
+  const padding =
+    Math.max(
+      0.15,
+      mapPath.width / 2
+    );
+
+  const left =
+    Math.min(x1, x2) -
+    padding;
+
+  const right =
+    Math.max(x1, x2) +
+    padding;
+
+  const top =
+    Math.min(y1, y2) -
+    padding;
+
+  const bottom =
+    Math.max(y1, y2) +
+    padding;
+
+  return sampleMapPath(
+    mapPath
+  ).some(
+    (point) =>
+      point.x >= left &&
+      point.x <= right &&
+      point.y >= top &&
+      point.y <= bottom
+  );
+}
+
 
 export function MapPage({
   worldId,
@@ -1069,6 +1428,12 @@ export function MapPage({
   const shouldEraseRegion = () =>
     eraseAll ||
     eraseTargets.includes("region");
+
+  const shouldErasePath = (
+    kind: MapPathKind
+  ) =>
+    eraseAll ||
+    eraseTargets.includes(kind);
 
   const toggleEraseTarget = (
     target: EraseTarget
@@ -1119,6 +1484,9 @@ export function MapPage({
   ] =
     useState<RoadStyle>("pathway");
 
+  const pathFreehandDrawingRef =
+    useRef(false);
+
   const [brushShape, setBrushShape] =
     useState<BrushShape>("round");
 
@@ -1143,6 +1511,12 @@ export function MapPage({
     useState<Record<TerrainType, string>>({
       ...DEFAULT_TERRAIN_STYLES,
     });
+
+  const selectedBiomeTool =
+    BIOME_TOOLS.find(
+      (item) =>
+        item.key === tool
+    );
 
   const [brushSize, setBrushSize] = useState(6);
   const [gridSize, setGridSize] = useState(28);
@@ -1314,6 +1688,130 @@ export function MapPage({
       })
     );
   };
+
+  const erasePathsAtPoint = (
+    x: number,
+    y: number
+  ) => {
+    if (!activeMap) {
+      return;
+    }
+
+    if (
+      !shouldErasePath("road") &&
+      !shouldErasePath("river")
+    ) {
+      return;
+    }
+
+    const rect =
+      canvasRef.current
+        ?.getBoundingClientRect();
+
+    const gridEraseRadius =
+      rect &&
+      rect.width > 0
+        ? Math.max(
+            0.8,
+            (
+              (
+                gridSize /
+                rect.width
+              ) *
+              100
+            ) / 2
+          )
+        : 1.2;
+
+    const eraseRadius =
+      drawMode === "grid"
+        ? gridEraseRadius
+        : Math.max(
+            3,
+            brushSize / 2
+          );
+
+    updateMap(
+      activeMap.id,
+      (map) => ({
+        ...map,
+
+        paths:
+          (map.paths ?? [])
+            .filter(
+              (mapPath) => {
+                if (
+                  !shouldErasePath(
+                    mapPath.kind
+                  )
+                ) {
+                  return true;
+                }
+
+                return !mapPathTouchesPoint(
+                  mapPath,
+                  x,
+                  y,
+                  eraseRadius
+                );
+              }
+            ),
+      })
+    );
+  };
+
+
+  const erasePathsInArea = (
+    start: {
+      x: number;
+      y: number;
+    },
+    end: {
+      x: number;
+      y: number;
+    }
+  ) => {
+    if (!activeMap) {
+      return;
+    }
+
+    if (
+      !shouldErasePath("road") &&
+      !shouldErasePath("river")
+    ) {
+      return;
+    }
+
+    updateMap(
+      activeMap.id,
+      (map) => ({
+        ...map,
+
+        paths:
+          (map.paths ?? [])
+            .filter(
+              (mapPath) => {
+                if (
+                  !shouldErasePath(
+                    mapPath.kind
+                  )
+                ) {
+                  return true;
+                }
+
+                return !mapPathTouchesArea(
+                  mapPath,
+                  start.x,
+                  start.y,
+                  end.x,
+                  end.y
+                );
+              }
+            ),
+      })
+    );
+  };
+
 
   const pushUndoSnapshot = (
     map: StoryMap
@@ -2127,25 +2625,102 @@ export function MapPage({
             maxColumn;
           column += 1
         ) {
-          const cellX =
-            (
-              (column + 0.5) /
-              REGION_COLUMNS
-            ) * 100;
+            const cellX =
+              (
+                (column + 0.5) /
+                REGION_COLUMNS
+              ) * 100;
 
-          const cellY =
-            (
-              (row + 0.5) /
-              REGION_ROWS
-            ) * 100;
+            const cellY =
+              (
+                (row + 0.5) /
+                REGION_ROWS
+              ) * 100;
 
-          if (
-            pointInsideTerrainStamp(
-              stamp,
-              cellX,
-              cellY
-            )
-          ) {
+            /*
+             * Grid drawing and Fill use different
+             * logical grids.
+             *
+             * A Grid square may overlap a Fill cell
+             * even when the Fill cell center falls
+             * just outside the square.
+             *
+             * Square Grid stamps therefore use
+             * rectangle-overlap detection. Other
+             * terrain stamps keep their normal
+             * point-in-stamp geometry.
+             */
+            const fillCellWidth =
+              100 /
+              REGION_COLUMNS;
+
+            const fillCellHeight =
+              100 /
+              REGION_ROWS;
+
+            const cellLeft =
+              column *
+              fillCellWidth;
+
+            const cellRight =
+              (column + 1) *
+              fillCellWidth;
+
+            const cellTop =
+              row *
+              fillCellHeight;
+
+            const cellBottom =
+              (row + 1) *
+              fillCellHeight;
+
+            const gridSquareTouchesCell =
+              stamp.mode ===
+                "grid" &&
+              stamp.shape ===
+                "square" &&
+              (
+                /*
+                 * Large Grid squares are detected when
+                 * the Fill cell center falls inside them.
+                 *
+                 * Tiny Grid squares may be smaller than
+                 * a Fill cell, so also assign them to the
+                 * Fill cell containing the square's own
+                 * center.
+                 *
+                 * Unlike the previous any-overlap test,
+                 * this does not turn one tiny square into
+                 * several blocked boundary cells.
+                 */
+                pointInsideTerrainStamp(
+                  stamp,
+                  cellX,
+                  cellY
+                ) ||
+                (
+                  stamp.x >=
+                    cellLeft &&
+                  stamp.x <
+                    cellRight &&
+                  stamp.y >=
+                    cellTop &&
+                  stamp.y <
+                    cellBottom
+                )
+              );
+
+            const touchesBoundaryCell =
+              gridSquareTouchesCell ||
+              pointInsideTerrainStamp(
+                stamp,
+                cellX,
+                cellY
+              );
+
+            if (
+              touchesBoundaryCell
+            ) {
             const key =
               cellKey(
                 column,
@@ -2567,6 +3142,7 @@ export function MapPage({
               ],
 
             smoothed: true,
+            fillGenerated: true,
           };
         }
       );
@@ -2633,6 +3209,19 @@ export function MapPage({
       tool === "location"
     ) {
       return;
+    }
+
+    /*
+     * Roads and rivers are independent map
+     * paths. Let the same Eraser gesture hit
+     * them before the existing terrain/region
+     * erase logic runs.
+     */
+    if (tool === "erase") {
+      erasePathsAtPoint(
+        x,
+        y
+      );
     }
 
     if (drawMode === "grid") {
@@ -3381,6 +3970,49 @@ export function MapPage({
         MapPathKind =
         tool;
 
+      if (
+        pathSegmentMode ===
+        "straight"
+      ) {
+        pathFreehandDrawingRef.current =
+          true;
+
+        setPathHoverPoint(null);
+
+        setPathDraft({
+          id:
+            crypto.randomUUID(),
+
+          kind,
+
+          width:
+            pathWidth,
+
+          roadStyle:
+            kind === "road"
+              ? roadStyle
+              : undefined,
+
+          points: [
+            {
+              x: point.x,
+              y: point.y,
+            },
+          ],
+
+          createdAt:
+            new Date()
+              .toISOString(),
+        });
+
+        event.currentTarget
+          .setPointerCapture(
+            event.pointerId
+          );
+
+        return;
+      }
+
       setPathDraft(
         (old) => {
           if (
@@ -3614,6 +4246,77 @@ export function MapPage({
       const point =
         canvasPoint(event);
 
+      /*
+       * Internally "straight" now powers
+       * the Freehand drawing mode.
+       */
+      if (
+        pathSegmentMode ===
+        "straight"
+      ) {
+        if (
+          pathFreehandDrawingRef.current
+        ) {
+          setPathDraft(
+            (old) => {
+              if (!old) {
+                return old;
+              }
+
+              const lastPoint =
+                old.points[
+                  old.points.length - 1
+                ];
+
+              /*
+               * Ignore extremely tiny mouse
+               * movements so the stroke does
+               * not collect excessive points.
+               */
+              if (
+                lastPoint &&
+                Math.hypot(
+                  point.x -
+                    lastPoint.x,
+                  point.y -
+                    lastPoint.y
+                ) < 0.12
+              ) {
+                return old;
+              }
+
+              return {
+                ...old,
+
+                width:
+                  pathWidth,
+
+                points: [
+                  ...old.points,
+                  {
+                    x: point.x,
+                    y: point.y,
+
+                    curveFromPrevious:
+                      false,
+                  },
+                ],
+              };
+            }
+          );
+        }
+
+        /*
+         * Freehand has no floating endpoint
+         * after the mouse is released.
+         */
+        return;
+      }
+
+      /*
+       * Internal Curve mode remains the
+       * click-to-route Natural mode.
+       */
       setPathHoverPoint({
         x: point.x,
         y: point.y,
@@ -3631,10 +4334,36 @@ export function MapPage({
 
   const stopPainting = () => {
     if (
+      (
+        tool === "river" ||
+        tool === "road"
+      ) &&
+      pathSegmentMode ===
+        "straight" &&
+      pathFreehandDrawingRef.current
+    ) {
+      pathFreehandDrawingRef.current =
+        false;
+
+      /*
+       * Keep the completed stroke as a
+       * draft until Finish is pressed.
+       */
+      return;
+    }
+
+    if (
       drawMode === "area" &&
       areaStartRef.current &&
       areaCurrentRef.current
     ) {
+      if (tool === "erase") {
+        erasePathsInArea(
+          areaStartRef.current,
+          areaCurrentRef.current
+        );
+      }
+
       applyAreaSelection(
         areaStartRef.current,
         areaCurrentRef.current
@@ -3663,15 +4392,98 @@ export function MapPage({
 
     pushUndoSnapshot(activeMap);
 
+    const finishedPoints: MapPathPoint[] =
+      pathSegmentMode ===
+      "straight"
+        ? (() => {
+            let points:
+              MapPathPoint[] =
+              pathDraft.points.map(
+                (point, index) => ({
+                  ...point,
+
+                  curveFromPrevious:
+                    index === 0
+                      ? undefined
+                      : false,
+                })
+              );
+
+            /*
+             * Two gentle smoothing passes remove
+             * mouse wobble while preserving the
+             * route and exact endpoints.
+             */
+            for (
+              let pass = 0;
+              pass < 2;
+              pass += 1
+            ) {
+              points =
+                points.map(
+                  (
+                    point,
+                    index,
+                    source
+                  ) => {
+                    if (
+                      index === 0 ||
+                      index ===
+                        source.length - 1
+                    ) {
+                      return {
+                        ...point,
+                      };
+                    }
+
+                    const previous =
+                      source[index - 1];
+
+                    const next =
+                      source[index + 1];
+
+                    return {
+                      ...point,
+
+                      x:
+                        previous.x *
+                          0.25 +
+                        point.x *
+                          0.5 +
+                        next.x *
+                          0.25,
+
+                      y:
+                        previous.y *
+                          0.25 +
+                        point.y *
+                          0.5 +
+                        next.y *
+                          0.25,
+
+                      curveFromPrevious:
+                        false,
+                    };
+                  }
+                );
+            }
+
+            return points;
+          })()
+        : pathDraft.points.map(
+            (point) => ({
+              ...point,
+            })
+          );
+
     const finishedPath: MapPath = {
       ...pathDraft,
-      width: pathWidth,
+
+      width:
+        pathWidth,
+
       points:
-        pathDraft.points.map(
-          (point) => ({
-            ...point,
-          })
-        ),
+        finishedPoints,
     };
 
     updateMap(
@@ -4119,50 +4931,182 @@ export function MapPage({
             ↖ Select
           </button>
 
-          {TERRAIN_TOOLS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={
-                tool === "erase"
-                  ? eraseTargets.includes(
+          {tool === "erase" ? (
+              TERRAIN_TOOLS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={
+                    eraseTargets.includes(
                       item.key
                     )
-                    ? "btn btn-primary"
-                    : "btn btn-secondary"
-                  : tool === item.key
-                    ? "btn btn-primary"
-                    : "btn btn-secondary"
-              }
-              onClick={() => {
-                if (tool === "erase") {
-                  toggleEraseTarget(
-                    item.key
-                  );
-                  return;
-                }
+                      ? "btn btn-primary"
+                      : "btn btn-secondary"
+                  }
+                  onClick={() =>
+                    toggleEraseTarget(
+                      item.key
+                    )
+                  }
+                >
+                  {item.icon}{" "}
+                  {item.label}
+                </button>
+              ))
+            ) : (
+              <>
+                {BASE_TERRAIN_TOOLS.map(
+                  (item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={
+                        tool === item.key
+                          ? "btn btn-primary"
+                          : "btn btn-secondary"
+                      }
+                      onClick={() => {
+                        setTool(item.key);
 
-                setTool(item.key);
+                        if (
+                          drawMode ===
+                          "path"
+                        ) {
+                          setDrawMode(
+                            "freehand"
+                          );
+                        }
 
-                if (
-                  drawMode === "path"
-                ) {
-                  setDrawMode(
-                    "freehand"
-                  );
-                }
+                        setPathDraft(null);
+                        setPathHoverPoint(
+                          null
+                        );
+                        setLocationEditor(
+                          null
+                        );
+                        setPlacingLocation(
+                          false
+                        );
+                        setMovingLocationId(
+                          ""
+                        );
+                      }}
+                    >
+                      {item.icon}{" "}
+                      {item.label}
+                    </button>
+                  )
+                )}
 
-                setPathDraft(null);
-                setPathHoverPoint(null);
-                setLocationEditor(null);
-                setPlacingLocation(false);
-                setMovingLocationId("");
-              }}
-            >
-              {item.icon} {item.label}
-            </button>
-          ))}
+                <select
+                  aria-label="Choose biome"
+                  title="Choose a biome"
+                  className={
+                    selectedBiomeTool
+                      ? "btn btn-primary"
+                      : "btn btn-secondary"
+                  }
+                  value={
+                    selectedBiomeTool
+                      ?.key ?? ""
+                  }
+                  onChange={(event) => {
+                    const nextBiome =
+                      event.target
+                        .value as TerrainType;
 
+                    const validBiome =
+                      BIOME_TOOLS.some(
+                        (item) =>
+                          item.key ===
+                          nextBiome
+                      );
+
+                    if (!validBiome) {
+                      return;
+                    }
+
+                    setTool(nextBiome);
+
+                    if (
+                      drawMode === "path"
+                    ) {
+                      setDrawMode(
+                        "freehand"
+                      );
+                    }
+
+                    setPathDraft(null);
+                    setPathHoverPoint(null);
+                    setLocationEditor(null);
+                    setPlacingLocation(false);
+                    setMovingLocationId("");
+                  }}
+                >
+                  <option
+                    value=""
+                    disabled
+                  >
+                    🌿 Biomes
+                  </option>
+
+                  {BIOME_TOOLS.map(
+                    (item) => (
+                      <option
+                        key={item.key}
+                        value={item.key}
+                      >
+                        {item.icon}{" "}
+                        {item.label}
+                      </option>
+                    )
+                  )}
+                </select>
+
+                {FEATURE_TERRAIN_TOOLS.map(
+                  (item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={
+                        tool === item.key
+                          ? "btn btn-primary"
+                          : "btn btn-secondary"
+                      }
+                      onClick={() => {
+                        setTool(item.key);
+
+                        if (
+                          drawMode ===
+                          "path"
+                        ) {
+                          setDrawMode(
+                            "freehand"
+                          );
+                        }
+
+                        setPathDraft(null);
+                        setPathHoverPoint(
+                          null
+                        );
+                        setLocationEditor(
+                          null
+                        );
+                        setPlacingLocation(
+                          false
+                        );
+                        setMovingLocationId(
+                          ""
+                        );
+                      }}
+                    >
+                      {item.icon}{" "}
+                      {item.label}
+                    </button>
+                  )
+                )}
+              </>
+            )}
           <button
             type="button"
             className={
@@ -4197,11 +5141,26 @@ export function MapPage({
           <button
             type="button"
             className={
-              tool === "river"
-                ? "btn btn-primary"
-                : "btn btn-secondary"
+              tool === "erase"
+                ? eraseTargets.includes(
+                    "river"
+                  )
+                  ? "btn btn-primary"
+                  : "btn btn-secondary"
+                : tool === "river"
+                  ? "btn btn-primary"
+                  : "btn btn-secondary"
             }
             onClick={() => {
+              if (
+                tool === "erase"
+              ) {
+                toggleEraseTarget(
+                  "river"
+                );
+                return;
+              }
+
               if (
                 tool === "river"
               ) {
@@ -4231,11 +5190,26 @@ export function MapPage({
           <button
             type="button"
             className={
-              tool === "road"
-                ? "btn btn-primary"
-                : "btn btn-secondary"
+              tool === "erase"
+                ? eraseTargets.includes(
+                    "road"
+                  )
+                  ? "btn btn-primary"
+                  : "btn btn-secondary"
+                : tool === "road"
+                  ? "btn btn-primary"
+                  : "btn btn-secondary"
             }
             onClick={() => {
+              if (
+                tool === "erase"
+              ) {
+                toggleEraseTarget(
+                  "road"
+                );
+                return;
+              }
+
               if (
                 tool === "road"
               ) {
@@ -4279,11 +5253,25 @@ export function MapPage({
                 : "btn btn-secondary"
             }
             onClick={() => {
+              const leavingErase =
+                tool === "erase";
+
+              if (
+                !leavingErase &&
+                drawMode === "path"
+              ) {
+                cancelPath();
+                setDrawMode(
+                  "freehand"
+                );
+              }
+
               setTool(
-                tool === "erase"
+                leavingErase
                   ? "select"
                   : "erase"
               );
+
               setLocationEditor(null);
               setPlacingLocation(false);
               setMovingLocationId("");
@@ -4486,7 +5474,7 @@ export function MapPage({
                   )
                 }
               >
-                ━ Straight
+                ✎ Freehand
               </button>
 
               <button
@@ -4503,7 +5491,7 @@ export function MapPage({
                   )
                 }
               >
-                ⌒ Curve
+                〰 Natural
               </button>
 
               <button
@@ -4906,9 +5894,9 @@ export function MapPage({
             Delete Map
           </button>
         </div>
-      )}
+        )}
 
-      <div className="sf-map-canvas-wrap-v2">
+        <div className="sf-map-canvas-wrap-v2">
         <div
           ref={canvasRef}
           className={[
@@ -5150,7 +6138,12 @@ export function MapPage({
                       }
                       cx={point.x}
                       cy={point.y}
-                      r="0.45"
+                      r={
+                        pathSegmentMode ===
+                        "straight"
+                          ? 0
+                          : 0.45
+                      }
                       fill="#ffffff"
                       stroke="#111827"
                       strokeWidth="0.18"
@@ -5616,10 +6609,9 @@ export function MapPage({
                 }
 
                 const key = [
-                  stamp.strokeId,
-                  stamp.type,
-                  stamp.terrainStyle ?? "",
-                ].join(":");
+                    stamp.strokeId,
+                    stamp.type,
+                  ].join(":");
 
                 const existing =
                   groups.get(key) ?? [];
@@ -5654,6 +6646,13 @@ export function MapPage({
                   return null;
                 }
 
+                  const containsFill =
+                    group.some(
+                      (stamp) =>
+                        stamp.fillGenerated ===
+                        true
+                    );
+
                 /*
                  * Smoothing strength is based on
                  * the original brush/cell size.
@@ -5665,13 +6664,13 @@ export function MapPage({
                  * solid merged landmass.
                  */
                 const smoothX =
-                  Math.max(
-                    0.45,
-                    Math.min(
-                      1.4,
-                      first.size * 0.28
-                    )
-                  );
+                    Math.max(
+                      0.28,
+                      Math.min(
+                        0.8,
+                        first.size * 0.18
+                      )
+                    );
 
                 /*
                  * SVG uses a 0-100 map coordinate
@@ -5679,8 +6678,27 @@ export function MapPage({
                  * the actual rectangular canvas.
                  */
                 const smoothY =
-                  smoothX *
-                  canvasAspect;
+                    smoothX *
+                    canvasAspect;
+
+                  /*
+                   * Slightly pull the final coastline
+                   * inward. This compensates for the
+                   * overlap used by Fill cells without
+                   * noticeably shrinking the island.
+                   */
+                  const coastInset =
+                    Math.max(
+                      0.05,
+                      Math.min(
+                        0.14,
+                        first.size * 0.025
+                      )
+                    );
+
+                  const coastInsetY =
+                    coastInset *
+                    canvasAspect;
 
                 const safeId =
                   (
@@ -5747,6 +6765,43 @@ export function MapPage({
                           "
                           result="terrainMerged"
                         />
+
+                          {/*
+                            Very subtle stable noise keeps
+                            the coastline organic without
+                            redesigning the user's shape.
+                          */}
+                          <feTurbulence
+                            type="fractalNoise"
+                            baseFrequency="0.045 0.065"
+                            numOctaves="2"
+                            seed="31"
+                            result="coastNoise"
+                          />
+
+                          <feDisplacementMap
+                            in="terrainMerged"
+                            in2="coastNoise"
+                            scale="0.32"
+                            xChannelSelector="R"
+                            yChannelSelector="G"
+                            result="naturalCoast"
+                          />
+
+                          <feGaussianBlur
+                            in="naturalCoast"
+                            stdDeviation="0.04 0.06"
+                            result="coastSoft"
+                          />
+
+                          {!containsFill && (
+                            <feMorphology
+                            in="coastSoft"
+                            operator="erode"
+                            radius={`${coastInset} ${coastInsetY}`}
+                            result="finalCoast"
+                          />
+                          )}
                       </filter>
                     </defs>
 
@@ -6066,7 +7121,8 @@ export function MapPage({
                    */
                   pointerEvents:
                     tool === "river" ||
-                    tool === "road"
+                    tool === "road" ||
+                    tool === "erase"
                       ? "none"
                       : "auto",
 
