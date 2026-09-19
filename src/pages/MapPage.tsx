@@ -1986,7 +1986,97 @@ export function MapPage({
     };
   };
 
-  const applyAreaSelection = (
+  const pointSupportsBiome = (
+      map: NonNullable<typeof activeMap>,
+      x: number,
+      y: number
+    ) => {
+      if (
+        pointIsLand(
+          map,
+          x,
+          y
+        )
+      ) {
+        return true;
+      }
+
+      /*
+       * Explicit Water should never be bridged
+       * by biome painting.
+       */
+      for (
+        let index =
+          map.terrain.length - 1;
+        index >= 0;
+        index -= 1
+      ) {
+        const stamp =
+          map.terrain[index];
+
+        if (
+          stamp.type !== "land" &&
+          stamp.type !== "water"
+        ) {
+          continue;
+        }
+
+        if (
+          pointInsideTerrainStamp(
+            stamp,
+            x,
+            y
+          )
+        ) {
+          return (
+            stamp.type ===
+            "land"
+          );
+        }
+      }
+
+      /*
+       * Smoothed Land can visually cover a
+       * microscopic gap between source stamps.
+       *
+       * Only bridge the gap when Land surrounds
+       * the cell from all four directions. This
+       * fills pinholes without expanding biomes
+       * noticeably beyond the actual coastline.
+       */
+      const sampleX =
+        (100 / REGION_COLUMNS) *
+        0.46;
+
+      const sampleY =
+        (100 / REGION_ROWS) *
+        0.46;
+
+      return (
+        pointIsLand(
+          map,
+          x - sampleX,
+          y
+        ) &&
+        pointIsLand(
+          map,
+          x + sampleX,
+          y
+        ) &&
+        pointIsLand(
+          map,
+          x,
+          y - sampleY
+        ) &&
+        pointIsLand(
+          map,
+          x,
+          y + sampleY
+        )
+      );
+    };
+
+    const applyAreaSelection = (
     startPoint: {
       x: number;
       y: number;
@@ -2038,6 +2128,63 @@ export function MapPage({
       return;
     }
 
+    const areaCellWidth =
+
+      100 /
+
+      REGION_COLUMNS;
+
+
+    const areaCellHeight =
+
+      100 /
+
+      REGION_ROWS;
+
+
+    const areaWidthCells =
+
+      (maxX - minX) /
+
+      areaCellWidth;
+
+
+    const areaHeightCells =
+
+      (maxY - minY) /
+
+      areaCellHeight;
+
+
+    /*
+
+     * Large biome Area selections should
+
+     * have an organic outside silhouette
+
+     * instead of a ruler-straight rectangle.
+
+     *
+
+     * Only edge cells are affected. Interior
+
+     * cells remain solid, preventing holes.
+
+     */
+
+    const naturalizeBiomeArea =
+
+      kind === "biome" &&
+
+      Math.min(
+
+        areaWidthCells,
+
+        areaHeightCells
+
+      ) >= 4;
+
+
     const cells: string[] = [];
 
     for (
@@ -2075,15 +2222,80 @@ export function MapPage({
         }
 
         if (
-          !erasingWithArea &&
-          !pointIsLand(
-            activeMap,
-            centerX,
-            centerY
-          )
-        ) {
-          continue;
-        }
+            naturalizeBiomeArea
+          ) {
+            const edgeDistance =
+              Math.min(
+                (
+                  centerX -
+                  minX
+                ) /
+                  areaCellWidth,
+                (
+                  maxX -
+                  centerX
+                ) /
+                  areaCellWidth,
+                (
+                  centerY -
+                  minY
+                ) /
+                  areaCellHeight,
+                (
+                  maxY -
+                  centerY
+                ) /
+                  areaCellHeight
+              );
+
+            /*
+             * Stable edge noise:
+             * same cell = same coastline every render.
+             */
+            const rawEdgeNoise =
+              Math.sin(
+                (
+                  column + 1
+                ) *
+                  12.9898 +
+                  (
+                    row + 1
+                  ) *
+                    78.233
+              ) *
+              43758.5453;
+
+            const edgeNoise =
+              rawEdgeNoise -
+              Math.floor(
+                rawEdgeNoise
+              );
+
+            /*
+             * Only disturb roughly the outer
+             * one-cell band. The center remains
+             * completely filled.
+             */
+            if (
+              edgeDistance <
+                1.15 &&
+              edgeNoise <
+                0.34
+            ) {
+              continue;
+            }
+          }
+
+          if (
+            !erasingWithArea &&
+            !pointSupportsBiome(
+              activeMap,
+              centerX,
+              centerY
+            )
+          ) {
+            continue;
+          }
 
         cells.push(
           cellKey(column, row)
@@ -3471,11 +3683,11 @@ export function MapPage({
              * on actual land.
              */
             if (
-              !pointIsLand(
-                activeMap,
-                centerX,
-                centerY
-              )
+              !pointSupportsBiome(
+                  activeMap,
+                  centerX,
+                  centerY
+                )
             ) {
               continue;
             }
@@ -3497,7 +3709,14 @@ export function MapPage({
         return;
       }
 
-      updateMap(activeMap.id, (map) => {
+      const gridStrokeId =
+          currentStrokeIdRef.current ||
+          crypto.randomUUID();
+
+        currentStrokeIdRef.current =
+          gridStrokeId;
+
+        updateMap(activeMap.id, (map) => {
         const alreadyPainted =
           map.terrain.some((stamp) => {
             if (
@@ -3534,9 +3753,8 @@ export function MapPage({
               mode: "grid",
               shape: "square",
               strokeId:
-                currentStrokeIdRef.current ||
-                crypto.randomUUID(),
-              terrainStyle:
+                  gridStrokeId,
+                terrainStyle:
                 terrainStyles[terrainTool],
             },
           ],
@@ -3902,11 +4120,11 @@ export function MapPage({
             }
 
             if (
-              !pointIsLand(
-                activeMap,
-                centerX,
-                centerY
-              )
+              !pointSupportsBiome(
+                  activeMap,
+                  centerX,
+                  centerY
+                )
             ) {
               continue;
             }
@@ -4376,9 +4594,51 @@ export function MapPage({
       return;
     }
 
-    paintingRef.current = false;
-    lastPaintRef.current = null;
-    currentStrokeIdRef.current = "";
+    const completedStrokeId =
+        currentStrokeIdRef.current;
+
+      const shouldAutoSmoothTerrain =
+        Boolean(
+          completedStrokeId
+        ) &&
+        (
+          tool === "land" ||
+          tool === "water"
+        ) &&
+        (
+          drawMode === "grid" ||
+          drawMode === "freehand"
+        );
+
+      paintingRef.current = false;
+      lastPaintRef.current = null;
+
+      if (
+        activeMap &&
+        shouldAutoSmoothTerrain
+      ) {
+        updateMap(
+          activeMap.id,
+          (map) => ({
+            ...map,
+
+            terrain:
+              map.terrain.map(
+                (stamp) =>
+                  stamp.strokeId ===
+                  completedStrokeId
+                    ? {
+                        ...stamp,
+                        smoothed:
+                          true,
+                      }
+                    : stamp
+              ),
+          })
+        );
+      }
+
+      currentStrokeIdRef.current = "";
   };
 
   const finishPath = () => {
@@ -6321,21 +6581,76 @@ export function MapPage({
                  * a little so the island coastline
                  * remains visible around the biome.
                  */
-                const smoothX =
-                  0.22;
+                const cellWidth =
+                    100 /
+                    group.columns;
 
-                const smoothY =
-                  smoothX *
-                  canvasAspect;
+                  const cellHeight =
+                    100 /
+                    group.rows;
 
-                const coastInset =
-                  0.13;
+                  /*
+                   * Biomes remain stored on the exact
+                   * logical cell grid, but their visible
+                   * cells overlap very slightly so the
+                   * renderer does not expose square seams.
+                   */
+                  const cellOverlapX =
+                    cellWidth *
+                    0.08;
 
-                const coastInsetY =
-                  coastInset *
-                  canvasAspect;
+                  const cellOverlapY =
+                    cellHeight *
+                    0.08;
 
-                return (
+                  /*
+                   * Merge the cells into one softer
+                   * continuous shape before naturalizing
+                   * the outside edge.
+                   */
+                  const smoothX =
+                    0.32;
+
+                  const smoothY =
+                    smoothX *
+                    canvasAspect;
+
+                  /*
+                   * Keep only a very light inset. The old
+                   * 0.13 erosion was strong enough to
+                   * emphasize the underlying cell grid.
+                   */
+                  const coastInset =
+                    0.055;
+
+                  const coastInsetY =
+                    coastInset *
+                    canvasAspect;
+
+                  /*
+                   * Shared organic boundary system for
+                   * every biome, with subtle differences
+                   * in edge character.
+                   */
+                  const biomeEdgeScale =
+                    group.terrainType ===
+                    "swamp"
+                      ? 0.72
+                      : group.terrainType ===
+                          "forest"
+                        ? 0.62
+                        : group.terrainType ===
+                            "desert"
+                          ? 0.54
+                          : group.terrainType ===
+                              "snow"
+                            ? 0.48
+                            : group.terrainType ===
+                                "plains"
+                              ? 0.44
+                              : 0.50;
+
+                  return (
                   <svg
                     key={groupKey}
                     viewBox="0 0 100 100"
@@ -6396,8 +6711,8 @@ export function MapPage({
                         */}
                         <feTurbulence
                           type="fractalNoise"
-                          baseFrequency="0.055 0.075"
-                          numOctaves="2"
+                          baseFrequency="0.038 0.052"
+                          numOctaves="3"
                           seed="17"
                           result="edgeNoise"
                         />
@@ -6405,7 +6720,7 @@ export function MapPage({
                         <feDisplacementMap
                           in="merged"
                           in2="edgeNoise"
-                          scale="0.7"
+                          scale={biomeEdgeScale}
                           xChannelSelector="R"
                           yChannelSelector="G"
                           result="naturalBiome"
@@ -6413,7 +6728,7 @@ export function MapPage({
 
                         <feGaussianBlur
                           in="naturalBiome"
-                          stdDeviation="0.10 0.14"
+                          stdDeviation="0.07 0.11"
                           result="naturalSoft"
                         />
 
@@ -6455,24 +6770,32 @@ export function MapPage({
                               <rect
                                 key={key}
                                 x={
-                                  (column /
-                                    group.columns) *
-                                  100
-                                }
-                                y={
-                                  (row /
-                                    group.rows) *
-                                  100
-                                }
-                                width={
-                                  100 /
-                                  group.columns
-                                }
-                                height={
-                                  100 /
-                                  group.rows
-                                }
-                                fill="white"
+                                    (
+                                      column /
+                                      group.columns
+                                    ) *
+                                      100 -
+                                    cellOverlapX /
+                                      2
+                                  }
+                                  y={
+                                    (
+                                      row /
+                                      group.rows
+                                    ) *
+                                      100 -
+                                    cellOverlapY /
+                                      2
+                                  }
+                                  width={
+                                    cellWidth +
+                                    cellOverlapX
+                                  }
+                                  height={
+                                    cellHeight +
+                                    cellOverlapY
+                                  }
+                                  fill="white"
                               />
                             );
                           })}
