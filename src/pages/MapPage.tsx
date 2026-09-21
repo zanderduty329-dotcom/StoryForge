@@ -533,7 +533,7 @@ const TERRAIN_STYLE_OPTIONS: Record<
   ],
 
   forest: [
-    { value: "ink-trees", label: "Ink Trees" },
+    { value: "ink-trees", label: "StoryForge Forest" },
     { value: "pine", label: "Pine Trees" },
     { value: "oak", label: "Oak Trees" },
     { value: "mixed", label: "Mixed Woodland" },
@@ -797,6 +797,643 @@ function terrainSymbol(
   }
 
   return "";
+}
+
+
+/*
+ * FOREST ORGANIC SCATTER V1
+ *
+ * Use a larger irregular repeat field so the eye does not
+ * immediately recognize rows or a tiny repeated stamp.
+ */
+function storyForgeForestPatternMetrics(
+  detailTier:
+    | "overview"
+    | "standard"
+    | "detailed"
+    | "close"
+) {
+  if (detailTier === "overview") {
+    return { width: 18, height: 13 };
+  }
+
+  if (detailTier === "standard") {
+    return { width: 15.5, height: 11.2 };
+  }
+
+  if (detailTier === "detailed") {
+    return { width: 13.8, height: 9.8 };
+  }
+
+  return { width: 12.4, height: 8.8 };
+}
+
+function storyForgeForestPattern(
+  style: string | undefined,
+  ink: string,
+  forestFill: string,
+  detailTier:
+    | "overview"
+    | "standard"
+    | "detailed"
+    | "close" = "standard"
+) {
+  const selected =
+    style ?? "ink-trees";
+
+  /*
+   * Tree artwork itself becomes physically smaller
+   * as the camera reveals more local forest detail.
+   */
+  const detailScale =
+    (
+      detailTier === "overview"
+        ? 1.06
+        : detailTier === "standard"
+          ? 1
+          : detailTier === "detailed"
+            ? 0.82
+            : 0.70
+    ) * 0.545;
+
+  /*
+   * STORYFORGE FOREST ART
+   *
+   * Density and zoom logic live below this section
+   * and are intentionally left untouched.
+   *
+   * These helpers only control how individual trees
+   * look.
+   */
+
+  const pine = (
+    x: number,
+    y: number,
+    scale: number
+  ) => {
+    /*
+     * Stable natural variation based on position.
+     * No Math.random(), so trees do not jump around
+     * when React rerenders.
+     */
+    const seed =
+      Math.sin(
+        x * 12.9898 +
+        y * 78.233
+      );
+
+    const lean =
+      seed * 2.2;
+
+    const xJitter =
+      seed * 0.34;
+
+    const yJitter =
+      Math.cos(
+        x * 17.31 +
+        y * 9.73
+      ) * 0.28;
+
+    /*
+     * Keep the forest artwork slightly smaller than
+     * the old stamped version.
+     */
+    const naturalScale =
+      scale *
+      detailScale *
+      (0.78 +
+        Math.abs(seed) * 0.05);
+
+    return (
+      <g
+        transform={
+          `translate(${x + xJitter} ${y + yJitter}) ` +
+          `rotate(${lean} 1.7 3.9) ` +
+          `scale(${naturalScale})`
+        }
+        stroke={ink}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {/*
+          Main silhouette.
+
+          The left and right sides deliberately do
+          not mirror one another perfectly.
+        */}
+        <path
+          d="
+            M1.68 0.10
+
+            C1.40 0.72 1.07 1.25 0.68 1.91
+            L1.14 1.78
+
+            C0.84 2.30 0.46 2.93 0.19 3.58
+            L0.87 3.30
+
+            C0.58 3.98 0.25 4.70 0.02 5.45
+            L0.96 5.04
+
+            C0.77 5.63 0.46 6.26 0.24 6.77
+            L1.30 6.32
+
+            L0.70 7.18
+            L2.74 7.18
+
+            L2.20 6.28
+            L3.16 6.66
+
+            C2.93 6.05 2.63 5.48 2.46 4.97
+            L3.28 5.29
+
+            C3.04 4.54 2.72 3.92 2.47 3.27
+            L3.12 3.50
+
+            C2.87 2.86 2.51 2.26 2.24 1.76
+            L2.70 1.91
+
+            C2.34 1.29 2.00 0.70 1.68 0.10
+            Z
+          "
+          fill={forestFill}
+          fillOpacity="0.88"
+          strokeWidth="0.30"
+        />
+
+        {/*
+          Slightly darker lower foliage gives the
+          tree more depth without turning it into a
+          heavy realistic illustration.
+        */}
+        <path
+          d="
+            M0.26 5.42
+            C0.92 5.14 1.42 5.24 1.69 4.91
+            C2.04 5.21 2.56 5.05 3.02 5.28
+
+            L3.16 6.66
+            L2.20 6.28
+            L2.74 7.18
+            L0.70 7.18
+            L1.30 6.32
+            L0.24 6.77
+            Z
+          "
+          fill={ink}
+          fillOpacity="0.08"
+          stroke="none"
+        />
+
+        {/*
+          Trunk + irregular branch marks.
+        */}
+        <path
+          d="
+            M1.68 1.72
+            C1.65 3.14 1.70 5.08 1.69 7.72
+
+            M1.67 3.02
+            L0.96 3.62
+
+            M1.69 3.78
+            L2.39 4.29
+
+            M1.68 4.65
+            L0.82 5.28
+
+            M1.70 5.42
+            L2.50 5.93
+          "
+          fill="none"
+          strokeWidth="0.25"
+          opacity="0.66"
+        />
+
+        {/*
+          Small interior ridge lines give the pine
+          the same cartographic edge language as
+          StoryForge Peaks.
+        */}
+        <path
+          d="
+            M1.12 2.32
+            L1.53 1.34
+
+            M2.10 2.25
+            L1.78 1.26
+
+            M0.82 4.20
+            L1.48 3.38
+
+            M2.53 4.13
+            L1.86 3.34
+          "
+          fill="none"
+          strokeWidth="0.18"
+          opacity="0.32"
+        />
+
+        {/*
+          Subtle ground marks keep trees from
+          looking pasted onto the biome color.
+        */}
+        <path
+          d="
+            M0.48 7.42
+            C1.00 7.22 1.43 7.36 1.77 7.25
+            C2.18 7.10 2.61 7.24 3.00 7.40
+
+            M0.92 7.68
+            C1.42 7.53 1.98 7.57 2.47 7.66
+          "
+          fill="none"
+          strokeWidth="0.17"
+          opacity="0.22"
+        />
+      </g>
+    );
+  };
+
+  const oak = (
+    x: number,
+    y: number,
+    scale: number
+  ) => {
+    const seed =
+      Math.sin(
+        x * 19.173 +
+        y * 31.417
+      );
+
+    const lean =
+      seed * 1.8;
+
+    const xJitter =
+      seed * 0.31;
+
+    const yJitter =
+      Math.cos(
+        x * 13.87 +
+        y * 21.41
+      ) * 0.25;
+
+    const naturalScale =
+      scale *
+      detailScale *
+      (0.79 +
+        Math.abs(seed) * 0.05);
+
+    return (
+      <g
+        transform={
+          `translate(${x + xJitter} ${y + yJitter}) ` +
+          `rotate(${lean} 2.0 3.5) ` +
+          `scale(${naturalScale})`
+        }
+        stroke={ink}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {/*
+          Trunk first so it visually disappears
+          behind the canopy.
+        */}
+        <path
+          d="
+            M1.98 6.76
+            C1.94 5.84 2.02 4.80 1.96 3.78
+
+            M1.97 4.78
+            L1.12 3.63
+
+            M1.98 4.52
+            L2.84 3.39
+
+            M1.96 5.28
+            L1.40 4.66
+
+            M2.00 5.09
+            L2.57 4.46
+          "
+          fill="none"
+          strokeWidth="0.31"
+        />
+
+        {/*
+          Irregular StoryForge canopy.
+
+          Instead of a circular cloud, it has
+          asymmetric lobes and a slightly uneven
+          lower edge.
+        */}
+        <path
+          d="
+            M0.48 4.13
+
+            C-0.06 3.60 0.12 2.86 0.71 2.55
+            C0.43 1.86 0.91 1.26 1.52 1.31
+
+            C1.66 0.57 2.35 0.25 2.86 0.75
+
+            C3.49 0.42 4.14 0.88 4.10 1.55
+
+            C4.78 1.60 5.07 2.24 4.72 2.72
+
+            C5.14 3.31 4.82 3.94 4.28 4.10
+
+            C4.18 4.80 3.41 5.12 2.88 4.74
+
+            C2.37 5.22 1.63 5.09 1.35 4.57
+
+            C0.92 4.72 0.62 4.52 0.48 4.13
+            Z
+          "
+          fill={forestFill}
+          fillOpacity="0.87"
+          strokeWidth="0.30"
+        />
+
+        {/*
+          Shadowed lower/right canopy plane.
+        */}
+        <path
+          d="
+            M1.34 4.56
+            C1.85 4.16 2.24 4.26 2.68 3.96
+
+            C3.18 4.25 3.74 4.07 4.27 4.10
+
+            C4.17 4.78 3.42 5.12 2.88 4.74
+
+            C2.38 5.21 1.63 5.09 1.34 4.56
+            Z
+          "
+          fill={ink}
+          fillOpacity="0.07"
+          stroke="none"
+        />
+
+        {/*
+          Canopy contour details.
+        */}
+        <path
+          d="
+            M0.95 3.25
+            C1.49 2.79 1.94 2.91 2.30 2.42
+
+            C2.70 1.88 3.20 1.86 3.72 2.18
+
+            M1.27 3.90
+            C1.74 3.53 2.17 3.59 2.49 3.27
+
+            M3.00 3.53
+            C3.34 3.17 3.69 3.12 4.04 3.32
+          "
+          fill="none"
+          strokeWidth="0.20"
+          opacity="0.38"
+        />
+
+        {/*
+          Small bark lines.
+        */}
+        <path
+          d="
+            M1.82 5.36
+            L2.07 5.09
+
+            M1.81 5.83
+            L2.08 5.57
+
+            M1.83 6.28
+            L2.06 6.04
+          "
+          fill="none"
+          strokeWidth="0.15"
+          opacity="0.28"
+        />
+
+        {/*
+          Ground integration.
+        */}
+        <path
+          d="
+            M0.72 6.94
+            C1.22 6.72 1.69 6.88 2.05 6.76
+            C2.54 6.59 3.02 6.76 3.49 6.92
+
+            M1.14 7.20
+            C1.62 7.06 2.17 7.09 2.74 7.18
+          "
+          fill="none"
+          strokeWidth="0.17"
+          opacity="0.22"
+        />
+      </g>
+    );
+  };
+
+  /*
+   * FOREST ORGANIC SCATTER V1
+   *
+   * Stable pseudo-random placement:
+   * - no obvious rows
+   * - no Math.random()
+   * - trees do not jump on rerender
+   * - occasional size variation
+   */
+  const stableForestUnit = (
+    index: number,
+    salt: number
+  ) => {
+    const raw =
+      Math.sin(
+        (index + 1) * 12.9898 +
+          salt * 78.233
+      ) * 43758.5453;
+
+    return raw - Math.floor(raw);
+  };
+
+  const patternMetrics =
+    storyForgeForestPatternMetrics(
+      detailTier
+    );
+
+  const targetCount =
+    detailTier === "overview"
+      ? 8
+      : detailTier === "standard"
+        ? 13
+        : detailTier === "detailed"
+          ? 17
+          : 21;
+
+  const minimumSpacing =
+    detailTier === "overview"
+      ? 2.8
+      : detailTier === "standard"
+        ? 2.15
+        : detailTier === "detailed"
+          ? 1.75
+          : 1.48;
+
+  type ForestScatterPoint = {
+    x: number;
+    y: number;
+    scale: number;
+    kind: "pine" | "oak";
+  };
+
+  const placements: ForestScatterPoint[] =
+    [];
+
+  const usableWidth =
+    Math.max(
+      1,
+      patternMetrics.width - 2.8
+    );
+
+  const usableHeight =
+    Math.max(
+      1,
+      patternMetrics.height - 3.4
+    );
+
+  let attempt = 0;
+
+  while (
+    placements.length < targetCount &&
+    attempt < targetCount * 80
+  ) {
+    /*
+     * Independent X/Y sequences prevent the points from
+     * settling into diagonal or horizontal bands.
+     */
+    const x =
+      0.35 +
+      stableForestUnit(
+        attempt,
+        1.731
+      ) *
+        usableWidth;
+
+    const y =
+      0.25 +
+      stableForestUnit(
+        attempt,
+        8.413
+      ) *
+        usableHeight;
+
+    const sizeSeed =
+      stableForestUnit(
+        attempt,
+        4.927
+      );
+
+    /*
+     * Mostly small trees, some medium trees, and an
+     * occasional slightly larger interior tree.
+     */
+    const treeScale =
+      0.69 +
+      sizeSeed * 0.27 +
+      (
+        sizeSeed > 0.93
+          ? 0.12
+          : 0
+      );
+
+    const hasRoom =
+      placements.every(
+        (existing) => {
+          const dx =
+            existing.x - x;
+
+          const dy =
+            existing.y - y;
+
+          /*
+           * Unequal X/Y weighting deliberately breaks
+           * the visual rhythm of rows.
+           */
+          const distance =
+            Math.sqrt(
+              dx * dx +
+                dy * dy * 1.24
+            );
+
+          return (
+            distance >=
+            minimumSpacing
+          );
+        }
+      );
+
+    if (hasRoom) {
+      let kind: "pine" | "oak";
+
+      if (selected === "pine") {
+        kind = "pine";
+      } else if (selected === "oak") {
+        kind = "oak";
+      } else if (selected === "mixed") {
+        kind =
+          stableForestUnit(
+            attempt,
+            12.13
+          ) > 0.5
+            ? "pine"
+            : "oak";
+      } else {
+        kind =
+          stableForestUnit(
+            attempt,
+            17.71
+          ) > 0.43
+            ? "pine"
+            : "oak";
+      }
+
+      placements.push({
+        x,
+        y,
+        scale: treeScale,
+        kind,
+      });
+    }
+
+    attempt += 1;
+  }
+
+  return (
+    <>
+      {placements.map(
+        (
+          placement,
+          index
+        ) => (
+          <g
+            key={`forest-tree-${index}`}
+          >
+            {placement.kind === "pine"
+              ? pine(
+                  placement.x,
+                  placement.y,
+                  placement.scale
+                )
+              : oak(
+                  placement.x,
+                  placement.y,
+                  placement.scale
+                )}
+          </g>
+        )
+      )}
+    </>
+  );
+
 }
 
 function terrainTexture(
@@ -1534,6 +2171,27 @@ export function MapPage({
     mountainScale,
     setMountainScale,
   ] = useState(1);
+  /*
+   * MAP ZOOM
+   *
+   * Zoom affects presentation only.
+   * Saved map coordinates stay unchanged.
+   */
+  const [mapZoom, setMapZoom] = useState(1);
+
+  const mapDetailTier:
+    | "overview"
+    | "standard"
+    | "detailed"
+    | "close" =
+    mapZoom < 0.75
+      ? "overview"
+      : mapZoom < 1.25
+        ? "standard"
+        : mapZoom < 1.75
+          ? "detailed"
+          : "close";
+
   const [gridSize, setGridSize] = useState(28);
   const [showGrid, setShowGrid] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -1561,6 +2219,297 @@ export function MapPage({
     useState("");
 
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Keep the map aspect ratio outside the SVG render path.
+   *
+   * Reading getBoundingClientRect() during JSX rendering can
+   * force synchronous browser layout work. ResizeObserver
+   * updates this only when the canvas layout actually changes.
+   */
+  const [
+    renderCanvasAspect,
+    setRenderCanvasAspect,
+  ] = useState(1.6);
+
+  useEffect(() => {
+    if (!editorOpen) {
+      return;
+    }
+
+    const canvas =
+      canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const updateAspect = () => {
+      const width =
+        canvas.clientWidth;
+
+      const height =
+        canvas.clientHeight;
+
+      if (
+        width <= 0 ||
+        height <= 0
+      ) {
+        return;
+      }
+
+      const nextAspect =
+        width / height;
+
+      setRenderCanvasAspect(
+        (oldAspect) =>
+          Math.abs(
+            oldAspect -
+            nextAspect
+          ) < 0.001
+            ? oldAspect
+            : nextAspect
+      );
+    };
+
+    updateAspect();
+
+    const observer =
+      new ResizeObserver(
+        updateAspect
+      );
+
+    observer.observe(canvas);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    editorOpen,
+    selectedMapId,
+  ]);
+
+  /*
+   * MAP TRACKPAD CAMERA
+   *
+   * Click the map once to make it the active
+   * camera surface.
+   *
+   * Chromium-based browsers expose a laptop
+   * trackpad pinch as a WheelEvent with ctrlKey.
+   * We intercept that gesture only over the map,
+   * preventing browser-page zoom while changing
+   * StoryForge's own mapZoom instead.
+   */
+  const mapGestureActiveRef =
+    useRef(false);
+
+  /*
+   * FAST CAMERA STATE
+   *
+   * Trackpad pinch updates the visual camera directly.
+   * React only receives the final zoom after the gesture
+   * settles, preventing the entire map renderer from
+   * rebuilding for every tiny trackpad event.
+   */
+  const mapZoomRef =
+    useRef(mapZoom);
+
+  const zoomCommitTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(
+      null
+    );
+
+  useEffect(() => {
+    mapZoomRef.current = mapZoom;
+
+    if (canvasRef.current) {
+      canvasRef.current.style.transform =
+        `scale(${mapZoom})`;
+    }
+  }, [mapZoom]);
+
+  useEffect(() => {
+    if (!editorOpen) {
+      mapGestureActiveRef.current = false;
+      return;
+    }
+
+    const canvas =
+      canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const handlePointerDown = (
+      event: PointerEvent
+    ) => {
+      const target =
+        event.target;
+
+      mapGestureActiveRef.current =
+        target instanceof Node &&
+        canvas.contains(target);
+    };
+
+    const handleDocumentPointerDown = (
+      event: PointerEvent
+    ) => {
+      const target =
+        event.target;
+
+      if (
+        !(target instanceof Node) ||
+        !canvas.contains(target)
+      ) {
+        mapGestureActiveRef.current = false;
+      }
+    };
+
+    const handleTrackpadPinch = (
+      event: WheelEvent
+    ) => {
+      /*
+       * Normal two-finger scrolling does NOT
+       * zoom the map.
+       *
+       * Chromebook/Chromium trackpad pinch is
+       * represented by ctrlKey + wheel.
+       */
+      if (
+        !mapGestureActiveRef.current ||
+        !event.ctrlKey
+      ) {
+        return;
+      }
+
+      /*
+       * Stop Chrome from zooming the entire page.
+       */
+      event.preventDefault();
+      event.stopPropagation();
+
+      /*
+       * Smooth proportional zoom.
+       *
+       * Clamp each incoming gesture event so a
+       * large trackpad delta cannot suddenly jump
+       * from one zoom extreme to the other.
+       */
+      const zoomStep =
+        Math.max(
+          -0.08,
+          Math.min(
+            0.08,
+            -event.deltaY * 0.004
+          )
+        );
+
+      const nextZoom =
+        mapZoomRef.current *
+        (1 + zoomStep);
+
+      const clampedZoom =
+        Math.max(
+          0.5,
+          Math.min(
+            2,
+            nextZoom
+          )
+        );
+
+      const roundedZoom =
+        Math.round(
+          clampedZoom * 1000
+        ) / 1000;
+
+      /*
+       * High-frequency camera motion bypasses React.
+       * CSS transforms are considerably cheaper than
+       * rebuilding all biome SVGs, masks and mountains.
+       */
+      mapZoomRef.current =
+        roundedZoom;
+
+      canvas.style.transform =
+        `scale(${roundedZoom})`;
+
+      /*
+       * Once the pinch pauses, commit the camera value
+       * back to React. This updates the percentage and
+       * detail tier only once per gesture burst.
+       */
+      if (
+        zoomCommitTimerRef.current
+      ) {
+        clearTimeout(
+          zoomCommitTimerRef.current
+        );
+      }
+
+      zoomCommitTimerRef.current =
+        setTimeout(() => {
+          setMapZoom(
+            mapZoomRef.current
+          );
+
+          zoomCommitTimerRef.current =
+            null;
+        }, 140);
+    };
+
+    canvas.addEventListener(
+      "pointerdown",
+      handlePointerDown
+    );
+
+    document.addEventListener(
+      "pointerdown",
+      handleDocumentPointerDown,
+      true
+    );
+
+    canvas.addEventListener(
+      "wheel",
+      handleTrackpadPinch,
+      {
+        passive: false,
+      }
+    );
+
+    return () => {
+      if (
+        zoomCommitTimerRef.current
+      ) {
+        clearTimeout(
+          zoomCommitTimerRef.current
+        );
+
+        zoomCommitTimerRef.current =
+          null;
+      }
+
+      canvas.removeEventListener(
+        "pointerdown",
+        handlePointerDown
+      );
+
+      document.removeEventListener(
+        "pointerdown",
+        handleDocumentPointerDown,
+        true
+      );
+
+      canvas.removeEventListener(
+        "wheel",
+        handleTrackpadPinch
+      );
+    };
+  }, [
+    editorOpen,
+    selectedMapId,
+  ]);
 
   const locationEditorRef =
     useRef<HTMLDivElement>(null);
@@ -1611,6 +2560,114 @@ export function MapPage({
       null,
     [maps, selectedMapId]
   );
+
+  /*
+   * MAP RENDER CACHES
+   *
+   * These collections only rebuild when the actual
+   * saved map data changes. Camera motion and unrelated
+   * editor state can reuse the same prepared data.
+   */
+  const biomeRenderGroups = useMemo(() => {
+    const groups =
+      new Map<
+        string,
+        {
+          terrainType: TerrainType;
+          style?: string;
+          columns: number;
+          rows: number;
+          cells: Set<string>;
+        }
+      >();
+
+    (
+      activeMap?.regions ?? []
+    ).forEach((region) => {
+      if (
+        region.kind === "political" ||
+        !region.terrainType
+      ) {
+        return;
+      }
+
+      const groupKey = [
+        region.kind,
+        region.terrainType,
+        region.style ?? "",
+        region.columns,
+        region.rows,
+      ].join(":");
+
+      let group =
+        groups.get(groupKey);
+
+      if (!group) {
+        group = {
+          terrainType:
+            region.terrainType,
+          style:
+            region.style,
+          columns:
+            region.columns,
+          rows:
+            region.rows,
+          cells:
+            new Set<string>(),
+        };
+
+        groups.set(
+          groupKey,
+          group
+        );
+      }
+
+      region.cells.forEach(
+        (key) =>
+          group!.cells.add(key)
+      );
+    });
+
+    return groups;
+  }, [activeMap?.regions]);
+
+  const landWaterTerrainStamps =
+    useMemo(
+      () =>
+        (
+          activeMap?.terrain ?? []
+        ).filter(
+          (stamp) =>
+            stamp.type === "land" ||
+            stamp.type === "water"
+        ),
+      [activeMap?.terrain]
+    );
+
+  const mountainTerrainStamps =
+    useMemo(
+      () =>
+        (
+          activeMap?.terrain ?? []
+        ).filter(
+          (stamp) =>
+            stamp.type === "mountain"
+        ),
+      [activeMap?.terrain]
+    );
+
+  const politicalMapRegions =
+    useMemo(
+      () =>
+        (
+          activeMap?.regions ?? []
+        ).filter(
+          (region) =>
+            region.kind === "political"
+        ),
+      [activeMap?.regions]
+    );
+
 
   useEffect(() => {
     try {
@@ -6212,7 +7269,70 @@ export function MapPage({
         </div>
         )}
 
-        <div className="sf-map-canvas-wrap-v2">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.55rem",
+            marginBottom: "0.7rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={mapZoom <= 0.5}
+            onClick={() =>
+              setMapZoom((old) =>
+                Math.max(0.5, old - 0.25)
+              )
+            }
+          >
+            − Zoom
+          </button>
+
+          <strong>
+            {Math.round(mapZoom * 100)}%
+            {" · "}
+            {mapDetailTier === "overview"
+              ? "Overview"
+              : mapDetailTier === "standard"
+                ? "Standard"
+                : mapDetailTier === "detailed"
+                  ? "Detailed"
+                  : "Close"}
+          </strong>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={mapZoom >= 2}
+            onClick={() =>
+              setMapZoom((old) =>
+                Math.min(2, old + 0.25)
+              )
+            }
+          >
+            + Zoom
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={mapZoom === 1}
+            onClick={() => setMapZoom(1)}
+          >
+            Reset
+          </button>
+        </div>
+
+        <div
+          className="sf-map-canvas-wrap-v2"
+          style={{
+            overflow: "auto",
+          }}
+        >
         <div
           ref={canvasRef}
           className={[
@@ -6228,6 +7348,16 @@ export function MapPage({
             .filter(Boolean)
             .join(" ")}
           style={{
+            /*
+              * Camera zoom.
+              *
+              * Keep the original StoryForge canvas dimensions
+              * intact. Zoom the completed map visually instead
+              * of changing its layout width.
+              */
+            transform: `scale(${mapZoom})`,
+            transformOrigin: "top left",
+            willChange: "transform",
             backgroundColor:
               (activeMap.base ?? "water") === "water"
                 ? activeMap.colors.water
@@ -6523,80 +7653,10 @@ export function MapPage({
              * every tiny region cell separately.
              */
             const groups =
-              new Map<
-                string,
-                {
-                  terrainType:
-                    TerrainType;
-                  style?: string;
-                  columns: number;
-                  rows: number;
-                  cells: Set<string>;
-                }
-              >();
-
-            (
-              activeMap.regions ?? []
-            ).forEach((region) => {
-              if (
-                region.kind ===
-                  "political" ||
-                !region.terrainType
-              ) {
-                return;
-              }
-
-              const groupKey = [
-                region.kind,
-                region.terrainType,
-                region.style ?? "",
-                region.columns,
-                region.rows,
-              ].join(":");
-
-              let group =
-                groups.get(
-                  groupKey
-                );
-
-              if (!group) {
-                group = {
-                  terrainType:
-                    region.terrainType,
-                  style:
-                    region.style,
-                  columns:
-                    region.columns,
-                  rows:
-                    region.rows,
-                  cells:
-                    new Set<string>(),
-                };
-
-                groups.set(
-                  groupKey,
-                  group
-                );
-              }
-
-              region.cells.forEach(
-                (key) =>
-                  group!.cells.add(
-                    key
-                  )
-              );
-            });
-
-            const rect =
-              canvasRef.current
-                ?.getBoundingClientRect();
+              biomeRenderGroups;
 
             const canvasAspect =
-              rect &&
-              rect.height > 0
-                ? rect.width /
-                  rect.height
-                : 1.6;
+              renderCanvasAspect;
 
             return [
               ...groups.entries(),
@@ -6636,6 +7696,17 @@ export function MapPage({
 
                   const symbolMaskId =
                     `sf-area-symbol-mask-${safeKey}`;
+
+                  /*
+                   * FOREST ENVIRONMENT AWARENESS V1
+                   *
+                   * Forest color still follows the painted biome.
+                   * Tree symbols receive a second mask so they can
+                   * thin naturally around map features without
+                   * changing the underlying forest biome.
+                   */
+                  const forestAwareSymbolMaskId =
+                    `sf-area-forest-aware-symbol-mask-${safeKey}`;
 
 const landMaskId =
                     `sf-area-land-mask-${safeKey}`;
@@ -7002,6 +8073,249 @@ const landMaskId =
                       </mask>
 
                         {/*
+                          FOREST ENVIRONMENT AWARENESS V1
+
+                          White = normal tree visibility.
+                          Gray = transition / thinning zone.
+                          Black = clear corridor.
+
+                          This keeps dense woodland in broad open
+                          areas while giving mountains, roads,
+                          rivers, and settlements breathing room.
+                        */}
+                        {group.terrainType === "forest" && (
+                          <mask
+                            id={forestAwareSymbolMaskId}
+                            maskUnits="userSpaceOnUse"
+                            x="0"
+                            y="0"
+                            width="100"
+                            height="100"
+                            style={{
+                              maskType: "luminance",
+                            }}
+                          >
+                            {/*
+                              Begin with the existing organic
+                              forest-symbol boundary.
+                            */}
+                            <rect
+                              x="0"
+                              y="0"
+                              width="100"
+                              height="100"
+                              fill="white"
+                              mask={`url(#${symbolMaskId})`}
+                            />
+
+                            {/*
+                              Roads and rivers create two zones:
+
+                              gray outer corridor = fewer trees
+                              black inner corridor = no trees
+
+                              Width responds to the path's own
+                              configured width.
+                            */}
+                            {(activeMap.paths ?? []).map(
+                              (mapPath) => {
+                                if (
+                                  mapPath.points.length < 2
+                                ) {
+                                  return null;
+                                }
+
+                                const d =
+                                  buildMapPathD(
+                                    mapPath.kind,
+                                    mapPath.points
+                                  );
+
+                                const transitionWidth =
+                                  Math.max(
+                                    mapPath.width +
+                                      (mapPath.kind ===
+                                      "river"
+                                        ? 2.0
+                                        : 1.55),
+                                    mapPath.kind ===
+                                    "river"
+                                      ? 2.5
+                                      : 1.8
+                                  );
+
+                                const clearWidth =
+                                  Math.max(
+                                    mapPath.width +
+                                      (mapPath.kind ===
+                                      "river"
+                                        ? 0.72
+                                        : 0.52),
+                                    mapPath.kind ===
+                                    "river"
+                                      ? 1.25
+                                      : 0.95
+                                  );
+
+                                return (
+                                  <g
+                                    key={`forest-path-clear-${mapPath.id}`}
+                                  >
+                                    <path
+                                      d={d}
+                                      fill="none"
+                                      stroke="black"
+                                      strokeWidth={
+                                        transitionWidth
+                                      }
+                                      strokeDasharray="1.15 2.15"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+
+                                    <path
+                                      d={d}
+                                      fill="none"
+                                      stroke="black"
+                                      strokeWidth={
+                                        clearWidth
+                                      }
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </g>
+                                );
+                              }
+                            )}
+
+                            {/*
+                              Mountains get an open core plus a
+                              partial transition ring.
+
+                              Their saved stamp size determines
+                              roughly how much woodland should
+                              step away from the ridge.
+                            */}
+                            {activeMap.terrain
+                              .filter(
+                                (stamp) =>
+                                  stamp.type ===
+                                  "mountain"
+                              )
+                              .map((stamp) => {
+                                const transitionRadius =
+                                  Math.max(
+                                    1.05,
+                                    stamp.size *
+                                      0.58
+                                  );
+
+                                const clearRadius =
+                                  Math.max(
+                                    0.58,
+                                    stamp.size *
+                                      0.34
+                                  );
+
+                                return (
+                                  <g
+                                    key={`forest-mountain-clear-${stamp.id}`}
+                                  >
+                                    <circle
+                                      cx={stamp.x}
+                                      cy={stamp.y}
+                                      r={
+                                        transitionRadius
+                                      }
+                                      fill="none"
+                                      stroke="black"
+                                      strokeWidth="0.52"
+                                      strokeDasharray="0.72 1.08"
+                                    />
+
+                                    <circle
+                                      cx={stamp.x}
+                                      cy={stamp.y}
+                                      r={
+                                        clearRadius
+                                      }
+                                      fill="black"
+                                    />
+                                  </g>
+                                );
+                              })}
+
+                            {/*
+                              Settlement clearing size follows
+                              the marker's configured scale.
+                            */}
+                            {activeMap.locations.map(
+                              (location) => {
+                                const transitionRadius =
+                                  location.size ===
+                                  "large"
+                                    ? 3.2
+                                    : location.size ===
+                                        "medium"
+                                      ? 2.6
+                                      : location.size ===
+                                          "tiny"
+                                        ? 1.45
+                                        : 2.0;
+
+                                const clearRadius =
+                                  location.size ===
+                                  "large"
+                                    ? 2.0
+                                    : location.size ===
+                                        "medium"
+                                      ? 1.55
+                                      : location.size ===
+                                          "tiny"
+                                        ? 0.82
+                                        : 1.15;
+
+                                return (
+                                  <g
+                                    key={`forest-location-clear-${location.id}`}
+                                  >
+                                    <circle
+                                      cx={
+                                        location.x
+                                      }
+                                      cy={
+                                        location.y
+                                      }
+                                      r={
+                                        transitionRadius
+                                      }
+                                      fill="none"
+                                      stroke="black"
+                                      strokeWidth="0.52"
+                                      strokeDasharray="0.72 1.08"
+                                    />
+
+                                    <circle
+                                      cx={
+                                        location.x
+                                      }
+                                      cy={
+                                        location.y
+                                      }
+                                      r={
+                                        clearRadius
+                                      }
+                                      fill="black"
+                                    />
+                                  </g>
+                                );
+                              }
+                            )}
+                          </mask>
+                        )}
+
+
+                        {/*
                           Actual Land/Water coastline.
 
                           White means biome is allowed.
@@ -7113,13 +8427,7 @@ const landMaskId =
                               }
                             />
 
-                            {activeMap.terrain
-                              .filter(
-                                (stamp) =>
-                                  stamp.type === "land" ||
-                                  stamp.type === "water"
-                              )
-                              .map((stamp) => {
+                            {landWaterTerrainStamps.map((stamp) => {
                                 const stampHeight =
                                   stamp.size *
                                   canvasAspect;
@@ -7170,22 +8478,49 @@ const landMaskId =
                         <pattern
                           id={patternId}
                           patternUnits="userSpaceOnUse"
-                          width="5.2"
-                          height="5.2"
-                        >
-                          <text
-                            x="1"
-                            y="3.8"
-                            fontSize="2.6"
-                            opacity="0.68"
-                            fill={
-                              activeMap
-                                .colors
-                                .label
+                            patternTransform={
+                              group.terrainType === "forest"
+                                ? "translate(-0.8 -0.45) rotate(-1.1 50 50)"
+                                : undefined
                             }
-                          >
-                            {symbol}
-                          </text>
+                          width={
+                              group.terrainType === "forest"
+                                ? storyForgeForestPatternMetrics(
+                                    mapDetailTier
+                                  ).width
+                                : 5.2
+                            }
+                            height={
+                              group.terrainType === "forest"
+                                ? storyForgeForestPatternMetrics(
+                                    mapDetailTier
+                                  ).height
+                                : 5.2
+                            }>
+                          {group.terrainType === "forest" ? (
+                              <g>
+                                {storyForgeForestPattern(
+                                    group.style,
+                                    activeMap.colors.label,
+                                    activeMap.colors.forest,
+                                    mapDetailTier
+                                  )}
+                              </g>
+                            ) : (
+                              <text
+                                x="1"
+                                y="3.8"
+                                fontSize="2.6"
+                                opacity="0.68"
+                                fill={
+                                  activeMap
+                                    .colors
+                                    .label
+                                }
+                              >
+                                {symbol}
+                              </text>
+                            )}
                         </pattern>
                       )}
                     </defs>
@@ -7215,8 +8550,12 @@ const landMaskId =
                           `url(#${patternId})`
                         }
                         mask={
-                          `url(#${symbolMaskId})`
-                        }
+                            `url(#${
+                              group.terrainType === "forest"
+                                ? forestAwareSymbolMaskId
+                                : symbolMaskId
+                            })`
+                          }
                       />
                     )}
                       </g>
@@ -7230,12 +8569,7 @@ const landMaskId =
             Political regions intentionally remain
             separate from terrain/biome rendering.
           */}
-          {(activeMap.regions ?? [])
-            .filter(
-              (region) =>
-                region.kind ===
-                "political"
-            )
+          {politicalMapRegions
             .flatMap((region) =>
               region.cells.map((key) => {
                 const {
@@ -7663,10 +8997,7 @@ const landMaskId =
 
           {(() => {
             const mountainStamps =
-              activeMap.terrain.filter(
-                (stamp) =>
-                  stamp.type === "mountain"
-              );
+              mountainTerrainStamps;
 
             const visibleMountains:
               TerrainStamp[] = [];
