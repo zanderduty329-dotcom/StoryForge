@@ -67,6 +67,12 @@ type TerrainStamp = {
   shape?: BrushShape;
   strokeId?: string;
   terrainStyle?: string;
+
+  /*
+   * Visual mountain size.
+   * Independent from automatic ridge density.
+   */
+  mountainScale?: number;
   smoothed?: boolean;
 
   fillGenerated?: boolean;
@@ -535,7 +541,7 @@ const TERRAIN_STYLE_OPTIONS: Record<
 
   mountain: [
     { value: "ink-peaks", label: "Ink Peaks" },
-    { value: "rocky", label: "Rocky Peaks" },
+    { value: "rocky", label: "StoryForge Peaks" },
     { value: "snow-peaks", label: "Snow Peaks" },
     { value: "range", label: "Mountain Range" },
   ],
@@ -572,7 +578,7 @@ const DEFAULT_TERRAIN_STYLES: Record<
   land: "plain",
   water: "plain",
   forest: "ink-trees",
-  mountain: "ink-peaks",
+  mountain: "rocky",
   desert: "dunes",
   plains: "grass",
   swamp: "reeds",
@@ -1519,6 +1525,15 @@ export function MapPage({
     );
 
   const [brushSize, setBrushSize] = useState(6);
+
+  /*
+   * Mountain artwork size is separate from
+   * range length and automatic density.
+   */
+  const [
+    mountainScale,
+    setMountainScale,
+  ] = useState(1);
   const [gridSize, setGridSize] = useState(28);
   const [showGrid, setShowGrid] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -3756,6 +3771,11 @@ export function MapPage({
                   gridStrokeId,
                 terrainStyle:
                 terrainStyles[terrainTool],
+
+                  mountainScale:
+                    terrainTool === "mountain"
+                      ? mountainScale
+                      : undefined,
             },
           ],
         };
@@ -4161,6 +4181,11 @@ export function MapPage({
         strokeId,
         terrainStyle:
           terrainStyles[terrainTool],
+
+          mountainScale:
+            terrainTool === "mountain"
+              ? mountainScale
+              : undefined,
       });
     }
 
@@ -5806,6 +5831,37 @@ export function MapPage({
               </label>
             )}
 
+          {tool === "mountain" && (
+            <label className="sf-map-brush-control-v2">
+              Scale
+
+              <input
+                type="range"
+                min="0.65"
+                max="1.8"
+                step="0.05"
+                value={mountainScale}
+                onChange={(event) =>
+                  setMountainScale(
+                    Number(
+                      event.target.value
+                    )
+                  )
+                }
+              />
+
+              <span>
+                {mountainScale < 0.8
+                  ? "Small"
+                  : mountainScale < 1.2
+                    ? "Medium"
+                    : mountainScale < 1.5
+                      ? "Large"
+                      : "Massive"}
+              </span>
+            </label>
+          )}
+
           <button
             type="button"
             className={
@@ -6570,6 +6626,20 @@ export function MapPage({
                 const maskId =
                   `sf-area-mask-${safeKey}`;
 
+                  /*
+                   * Land/Water coastline mask.
+                   * Biomes retain their organic edge but
+                   * cannot visually extend outside Land.
+                   */
+                                    const symbolFilterId =
+                    `sf-area-symbol-filter-${safeKey}`;
+
+                  const symbolMaskId =
+                    `sf-area-symbol-mask-${safeKey}`;
+
+const landMaskId =
+                    `sf-area-land-mask-${safeKey}`;
+
                 const patternId =
                   `sf-area-pattern-${safeKey}`;
 
@@ -6633,24 +6703,24 @@ export function MapPage({
                    * in edge character.
                    */
                   const biomeEdgeScale =
-                    group.terrainType ===
-                    "swamp"
-                      ? 0.72
-                      : group.terrainType ===
-                          "forest"
-                        ? 0.62
+                      group.terrainType ===
+                      "swamp"
+                        ? 0.26
                         : group.terrainType ===
-                            "desert"
-                          ? 0.54
+                            "forest"
+                          ? 0.22
                           : group.terrainType ===
-                              "snow"
-                            ? 0.48
+                              "desert"
+                            ? 0.19
                             : group.terrainType ===
-                                "plains"
-                              ? 0.44
-                              : 0.50;
+                                "snow"
+                              ? 0.17
+                              : group.terrainType ===
+                                  "plains"
+                                ? 0.15
+                                : 0.18;
 
-                  return (
+                    return (
                   <svg
                     key={groupKey}
                     viewBox="0 0 100 100"
@@ -6740,7 +6810,75 @@ export function MapPage({
                           }
                           result="coastInset"
                         />
+
+                          {/*
+                            Final biome color feather.
+
+                            This makes the terrain color
+                            gradually lose density instead
+                            of ending in noisy blotches.
+                          */}
+                          <feGaussianBlur
+                            in="coastInset"
+                            stdDeviation={
+                              `0.18 ${0.18 * canvasAspect}`
+                            }
+                            result="biomeFeather"
+                          />
                       </filter>
+
+                        {/*
+                          Symbols deliberately extend a little
+                          beyond the color feather so forests,
+                          grasslands, marshes, etc. do not look
+                          like flat clipped stickers.
+                        */}
+                        <filter
+                          id={symbolFilterId}
+                          x="-5"
+                          y="-8"
+                          width="110"
+                          height="116"
+                          filterUnits="userSpaceOnUse"
+                          colorInterpolationFilters="sRGB"
+                        >
+                          <feGaussianBlur
+                            in="SourceGraphic"
+                            stdDeviation={
+                              `0.22 ${0.22 * canvasAspect}`
+                            }
+                            result="symbolBlur"
+                          />
+
+                          <feColorMatrix
+                            in="symbolBlur"
+                            type="matrix"
+                            values="
+                              1 0 0 0 0
+                              0 1 0 0 0
+                              0 0 1 0 0
+                              0 0 0 20 -9
+                            "
+                            result="symbolMerged"
+                          />
+
+                          <feMorphology
+                            in="symbolMerged"
+                            operator="dilate"
+                            radius={
+                              `0.24 ${0.24 * canvasAspect}`
+                            }
+                            result="symbolSpread"
+                          />
+
+                          <feGaussianBlur
+                            in="symbolSpread"
+                            stdDeviation={
+                              `0.04 ${0.04 * canvasAspect}`
+                            }
+                            result="symbolSoft"
+                          />
+                        </filter>
 
                       <mask
                         id={maskId}
@@ -6802,6 +6940,232 @@ export function MapPage({
                         </g>
                       </mask>
 
+                        {/*
+                          Wider symbol boundary.
+                        */}
+<mask
+                        id={symbolMaskId}
+                        maskUnits="userSpaceOnUse"
+                        x="0"
+                        y="0"
+                        width="100"
+                        height="100"
+                      >
+                        <g
+                          filter={`url(#${symbolFilterId})`}
+                        >
+                          {[
+                            ...group.cells,
+                          ].map((key) => {
+                            const {
+                              column,
+                              row,
+                            } =
+                              parseCellKey(
+                                key
+                              );
+
+                            return (
+                              <rect
+                                key={key}
+                                x={
+                                    (
+                                      column /
+                                      group.columns
+                                    ) *
+                                      100 -
+                                    cellOverlapX /
+                                      2
+                                  }
+                                  y={
+                                    (
+                                      row /
+                                      group.rows
+                                    ) *
+                                      100 -
+                                    cellOverlapY /
+                                      2
+                                  }
+                                  width={
+                                    cellWidth +
+                                    cellOverlapX
+                                  }
+                                  height={
+                                    cellHeight +
+                                    cellOverlapY
+                                  }
+                                  fill="white"
+                              />
+                            );
+                          })}
+                        </g>
+                      </mask>
+
+                        {/*
+                          Actual Land/Water coastline.
+
+                          White means biome is allowed.
+                          Black means biome is hidden.
+
+                          Land and Water stay in saved order,
+                          matching pointIsLand().
+                        */}
+                        <filter
+                          id={`sf-area-land-inset-filter-${safeKey}`}
+                          x="-6"
+                          y="-10"
+                          width="112"
+                          height="120"
+                          filterUnits="userSpaceOnUse"
+                          colorInterpolationFilters="sRGB"
+                        >
+                          {/*
+                            First soften the saved Land/Water
+                            geometry just enough to remove small
+                            stamp/grid corners.
+                          */}
+                          <feGaussianBlur
+                            in="SourceGraphic"
+                            stdDeviation={
+                              `0.30 ${0.30 * canvasAspect}`
+                            }
+                            result="landSoft"
+                          />
+
+                          {/*
+                            A small stable displacement prevents
+                            the protected coast from becoming a
+                            perfectly even artificial ring.
+                          */}
+                          <feTurbulence
+                            type="fractalNoise"
+                            baseFrequency="0.025 0.04"
+                            numOctaves="2"
+                            seed="53"
+                            result="shoreNoise"
+                          />
+
+                          <feDisplacementMap
+                            in="landSoft"
+                            in2="shoreNoise"
+                            scale="0.18"
+                            xChannelSelector="R"
+                            yChannelSelector="G"
+                            result="naturalLand"
+                          />
+
+                          {/*
+                            This is the actual protected coast.
+
+                            Increasing 0.58 makes the exposed
+                            shoreline wider. Decreasing it lets
+                            biomes grow closer to the water.
+                          */}
+                          <feMorphology
+                            in="naturalLand"
+                            operator="erode"
+                            radius={
+                              `0.58 ${0.58 * canvasAspect}`
+                            }
+                            result="coastalInset"
+                          />
+
+                          {/*
+                            Feather the inner coast very slightly
+                            so forest/plains/etc. blend into the
+                            exposed coastal land instead of ending
+                            on a razor-sharp line.
+                          */}
+                          <feGaussianBlur
+                            in="coastalInset"
+                            stdDeviation={
+                              `0.07 ${0.07 * canvasAspect}`
+                            }
+                            result="coastalInsetSoft"
+                          />
+                        </filter>
+
+                        <mask
+                          id={landMaskId}
+                          maskUnits="userSpaceOnUse"
+                          x="0"
+                          y="0"
+                          width="100"
+                          height="100"
+                          style={{
+                            maskType: "luminance",
+                          }}
+                        >
+                          <g
+                            filter={
+                              `url(#sf-area-land-inset-filter-${safeKey})`
+                            }
+                          >
+                            <rect
+                              x="0"
+                              y="0"
+                              width="100"
+                              height="100"
+                              fill={
+                                (activeMap.base ?? "water") === "land"
+                                  ? "white"
+                                  : "black"
+                              }
+                            />
+
+                            {activeMap.terrain
+                              .filter(
+                                (stamp) =>
+                                  stamp.type === "land" ||
+                                  stamp.type === "water"
+                              )
+                              .map((stamp) => {
+                                const stampHeight =
+                                  stamp.size *
+                                  canvasAspect;
+
+                                const maskFill =
+                                  stamp.type === "land"
+                                    ? "white"
+                                    : "black";
+
+                                if (
+                                  stamp.mode !== "grid" &&
+                                  stamp.shape !== "square"
+                                ) {
+                                  return (
+                                    <ellipse
+                                      key={`land-mask-${stamp.id}`}
+                                      cx={stamp.x}
+                                      cy={stamp.y}
+                                      rx={stamp.size / 2}
+                                      ry={stampHeight / 2}
+                                      fill={maskFill}
+                                    />
+                                  );
+                                }
+
+                                return (
+                                  <rect
+                                    key={`land-mask-${stamp.id}`}
+                                    x={
+                                      stamp.x -
+                                      stamp.size / 2
+                                    }
+                                    y={
+                                      stamp.y -
+                                      stampHeight / 2
+                                    }
+                                    width={stamp.size}
+                                    height={stampHeight}
+                                    fill={maskFill}
+                                  />
+                                );
+                              })}
+                          </g>
+                        </mask>
+
+
                       {symbol && (
                         <pattern
                           id={patternId}
@@ -6826,7 +7190,10 @@ export function MapPage({
                       )}
                     </defs>
 
-                    <rect
+                    <g
+                        mask={`url(#${landMaskId})`}
+                      >
+<rect
                       x="0"
                       y="0"
                       width="100"
@@ -6848,10 +7215,11 @@ export function MapPage({
                           `url(#${patternId})`
                         }
                         mask={
-                          `url(#${maskId})`
+                          `url(#${symbolMaskId})`
                         }
                       />
                     )}
+                      </g>
                   </svg>
                 );
               }
@@ -6924,6 +7292,15 @@ export function MapPage({
 
             activeMap.terrain.forEach(
               (stamp) => {
+                /*
+                 * Mountains are symbol-only features.
+                 * Keep their data, but skip the generic
+                 * smoothed terrain fill renderer.
+                 */
+                if (stamp.type === "mountain") {
+                  return;
+                }
+
                 if (
                   !stamp.smoothed ||
                   !stamp.strokeId
@@ -7216,7 +7593,15 @@ export function MapPage({
              * terrain array so Eraser and Undo can
              * still edit the underlying map.
              */
-            if (stamp.smoothed) {
+            /*
+             * Mountains never draw as colored terrain
+             * stamps. Their dedicated peak renderer below
+             * is their only visible representation.
+             */
+            if (
+              stamp.smoothed ||
+              stamp.type === "mountain"
+            ) {
               return null;
             }
 
@@ -7277,30 +7662,62 @@ export function MapPage({
           })}
 
           {(() => {
+            const mountainStamps =
+              activeMap.terrain.filter(
+                (stamp) =>
+                  stamp.type === "mountain"
+              );
+
             const visibleMountains:
               TerrainStamp[] = [];
 
-            for (
-              const stamp of
-              activeMap.terrain
-            ) {
-              if (
-                stamp.type !==
-                "mountain"
+            /*
+             * Stable pseudo-randomness.
+             *
+             * A mountain keeps the same ridge shape
+             * after React rerenders or map reloads.
+             */
+            const stableMountainValue = (
+              value: string
+            ) => {
+              let hash = 2166136261;
+
+              for (
+                let index = 0;
+                index < value.length;
+                index += 1
               ) {
-                continue;
+                hash ^=
+                  value.charCodeAt(index);
+
+                hash = Math.imul(
+                  hash,
+                  16777619
+                );
               }
 
-              /*
-               * Avoid stacking ten mountain
-               * symbols almost on top of each
-               * other in a dense brush stroke.
-               */
-              const spacing =
-                Math.max(
-                  1.5,
-                  stamp.size * 0.55
-                );
+              return (
+                (hash >>> 0) /
+                4294967295
+              );
+            };
+
+            /*
+             * Reduce the extremely dense raw brush
+             * samples into visible ridge clusters.
+             */
+            for (
+              const stamp of
+              mountainStamps
+            ) {
+                /*
+                 * Mountain artwork size is independent from
+                 * automatic ridge spacing.
+                 *
+                 * Changing Scale changes only the visible
+                 * mountain artwork, not mountain density.
+                 */
+                const spacing = 2.75;
 
               const tooClose =
                 visibleMountains.some(
@@ -7329,51 +7746,620 @@ export function MapPage({
               }
             }
 
+            /*
+             * Group visible ridge samples by their
+             * original brush stroke.
+             */
+            const visibleStrokeGroups =
+              new Map<
+                string,
+                TerrainStamp[]
+              >();
+
+            visibleMountains.forEach(
+              (stamp) => {
+                const strokeKey =
+                  stamp.strokeId ??
+                  stamp.id;
+
+                const group =
+                  visibleStrokeGroups.get(
+                    strokeKey
+                  ) ?? [];
+
+                group.push(stamp);
+
+                visibleStrokeGroups.set(
+                  strokeKey,
+                  group
+                );
+              }
+            );
+
             return visibleMountains.map(
-              (stamp) => (
-                <span
-                  key={
-                    `mountain-symbol-${stamp.id}`
-                  }
-                  aria-hidden="true"
-                  style={{
-                    position:
-                      "absolute",
+              (stamp) => {
+                const strokeKey =
+                  stamp.strokeId ??
+                  stamp.id;
 
-                    left:
-                      `${stamp.x}%`,
+                const stroke =
+                  visibleStrokeGroups.get(
+                    strokeKey
+                  ) ?? [stamp];
 
-                    top:
-                      `${stamp.y}%`,
+                const strokeIndex =
+                  stroke.indexOf(stamp);
 
-                    transform:
-                      "translate(-50%, -50%)",
+                const first =
+                  stroke[0] ??
+                  stamp;
 
-                    pointerEvents:
-                      "none",
+                const last =
+                  stroke[
+                    stroke.length - 1
+                  ] ?? stamp;
 
-                    zIndex: 4,
+                const distanceToStart =
+                  Math.sqrt(
+                    (stamp.x -
+                      first.x) **
+                      2 +
+                      (stamp.y -
+                        first.y) **
+                        2
+                  );
 
-                    lineHeight: 1,
+                const distanceToEnd =
+                  Math.sqrt(
+                    (stamp.x -
+                      last.x) **
+                      2 +
+                      (stamp.y -
+                        last.y) **
+                        2
+                  );
 
-                    fontSize:
-                      `${Math.max(
-                        12,
+                /*
+                 * Range ends naturally get weaker.
+                 */
+                const edgeDepth =
+                  Math.max(
+                    2.0,
+                    stamp.size * 1.2
+                  );
+
+                const endStrength =
+                  Math.max(
+                    0,
+                    Math.min(
+                      1,
+                      Math.min(
+                        distanceToStart,
+                        distanceToEnd
+                      ) /
+                        edgeDepth
+                    )
+                  );
+
+                /*
+                 * Local ridge density.
+                 *
+                 * A straight range normally has fewer
+                 * nearby clusters at its ends and more
+                 * support through its interior.
+                 */
+                const neighborRadius =
+                  Math.max(
+                    2.5,
+                    stamp.size * 1.5
+                  );
+
+                const neighborCount =
+                  stroke.filter(
+                    (other) => {
+                      const dx =
+                        other.x -
+                        stamp.x;
+
+                      const dy =
+                        other.y -
+                        stamp.y;
+
+                      return (
+                        Math.sqrt(
+                          dx * dx +
+                            dy * dy
+                        ) <=
+                        neighborRadius
+                      );
+                    }
+                  ).length;
+
+                const neighborStrength =
+                  Math.max(
+                    0,
+                    Math.min(
+                      1,
+                      (neighborCount -
+                        1) /
+                        3
+                    )
+                  );
+
+                /*
+                 * Combine end-distance and local
+                 * support into one density value.
+                 */
+                const density =
+                  Math.max(
+                    0,
+                    Math.min(
+                      1,
+                      endStrength *
+                        0.48 +
+                        neighborStrength *
+                          0.52
+                    )
+                  );
+
+                const countRoll =
+                  stableMountainValue(
+                    `${stamp.id}:peaks`
+                  );
+
+                let peakCount = 1;
+
+                if (density >= 0.72) {
+                  peakCount =
+                    countRoll < 0.58
+                      ? 3
+                      : 2;
+                } else if (
+                  density >= 0.38
+                ) {
+                  peakCount =
+                    countRoll < 0.68
+                      ? 2
+                      : 1;
+                }
+
+                /*
+                 * Outer-range clusters become smaller.
+                 */
+                const sizeVariation =
+                  0.90 +
+                  stableMountainValue(
+                    `${stamp.id}:size`
+                  ) *
+                    0.18;
+
+                const mountainScaleValue =
+                  typeof stamp.mountainScale ===
+                  "number"
+                    ? Math.max(
+                        0.65,
                         Math.min(
-                          25,
-                          10 +
-                            stamp.size *
-                              1.25
+                          1.8,
+                          stamp.mountainScale
                         )
-                      )}px`,
-                  }}
-                >
-                  {terrainSymbol(
+                      )
+                    : 1;
+
+                /*
+                 * Density still gives range edges a
+                 * small natural taper.
+                 *
+                 * Scale is now the primary control over
+                 * physical mountain size.
+                 */
+                const densityScale =
+                  0.84 +
+                  density * 0.16;
+
+                const ridgeWidth =
+                  Math.max(
+                    1.8,
+                    Math.min(
+                      6.4,
+                      3.25 *
+                        mountainScaleValue *
+                        densityScale *
+                        sizeVariation
+                    )
+                  );
+
+                const ridgeHeight =
+                  ridgeWidth *
+                  0.68;
+
+                const mountainFill =
+                  terrainColor(
                     "mountain",
-                    stamp.terrainStyle
-                  )}
-                </span>
-              )
+                    activeMap.colors
+                  );
+
+                const ink =
+                  activeMap.colors.label;
+
+                  /*
+                   * Each mountain stamp remembers the
+                   * style selected when it was drawn.
+                   */
+                  const mountainStyle =
+                    stamp.terrainStyle ??
+                    "rocky";
+
+                const peakVariation =
+                  stableMountainValue(
+                    `${stamp.id}:height`
+                  );
+
+                const mainPeakY =
+                  7 +
+                  peakVariation * 6;
+
+                return (
+                  <svg
+                    key={
+                      `mountain-ridge-${stamp.id}`
+                    }
+                    viewBox="0 0 100 64"
+                    preserveAspectRatio="xMidYMid meet"
+                    aria-hidden="true"
+                    style={{
+                      position:
+                        "absolute",
+
+                      left:
+                        `${stamp.x}%`,
+
+                      top:
+                        `${stamp.y}%`,
+
+                      width:
+                        `${ridgeWidth}%`,
+
+                      height:
+                        `${ridgeHeight}%`,
+
+                      transform:
+                        "translate(-50%, -54%)",
+
+                      overflow:
+                        "visible",
+
+                      pointerEvents:
+                        "none",
+
+                      zIndex: 4,
+                    }}
+                  >
+                      {mountainStyle === "rocky" && (
+                        <>
+                          {/*
+                           * STORYFORGE BASELINE PEAKS
+                           *
+                           * Inspired by the approved concept:
+                           * clean dark cartographic outline,
+                           * layered ridge faces and subtle
+                           * parchment-map ground marks.
+                           */}
+
+                          <path
+                            d={
+                              peakCount === 1
+                                ? `M5 59
+                                   L17 53
+                                   L29 39
+                                   L38 31
+                                   L50 ${mainPeakY}
+                                   L59 31
+                                   L68 40
+                                   L80 52
+                                   L95 59
+                                   Z`
+                                : peakCount === 2
+                                  ? `M3 59
+                                     L15 51
+                                     L29 27
+                                     L39 40
+                                     L46 48
+                                     L56 ${mainPeakY}
+                                     L66 31
+                                     L76 44
+                                     L84 51
+                                     L97 59
+                                     Z`
+                                  : `M2 59
+                                     L13 51
+                                     L24 32
+                                     L34 43
+                                     L41 49
+                                     L51 ${mainPeakY}
+                                     L62 39
+                                     L70 45
+                                     L79 27
+                                     L89 46
+                                     L99 59
+                                     Z`
+                            }
+                            fill={mountainFill}
+                            fillOpacity="0.88"
+                            stroke={ink}
+                            strokeWidth="2.7"
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                          />
+
+                          <path
+                            d={
+                              peakCount === 1
+                                ? `M50 ${mainPeakY}
+                                   L43 29
+                                   L37 39
+
+                                   M50 ${mainPeakY}
+                                   L57 30
+                                   L63 41
+
+                                   M29 39
+                                   L23 49
+
+                                   M68 40
+                                   L74 50`
+                                : peakCount === 2
+                                  ? `M29 27
+                                     L23 39
+                                     L17 48
+
+                                     M29 27
+                                     L35 36
+                                     L39 40
+
+                                     M56 ${mainPeakY}
+                                     L49 29
+                                     L43 41
+
+                                     M56 ${mainPeakY}
+                                     L63 27
+                                     L66 31
+
+                                     M76 44
+                                     L82 52`
+                                  : `M24 32
+                                     L18 43
+                                     L13 51
+
+                                     M24 32
+                                     L30 40
+                                     L34 43
+
+                                     M51 ${mainPeakY}
+                                     L43 29
+                                     L36 42
+
+                                     M51 ${mainPeakY}
+                                     L58 30
+                                     L62 39
+
+                                     M79 27
+                                     L72 39
+                                     L67 47
+
+                                     M79 27
+                                     L85 38
+                                     L89 46`
+                            }
+                            fill="none"
+                            stroke={ink}
+                            strokeWidth="1.55"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity="0.68"
+                          />
+
+                          <path
+                            d="
+                              M9 57
+                              C20 54 29 58 40 55
+                              C51 52 62 57 73 54
+                              C82 52 89 55 94 56
+                            "
+                            fill="none"
+                            stroke={ink}
+                            strokeWidth="1"
+                            strokeLinecap="round"
+                            opacity="0.32"
+                          />
+
+                          <path
+                            d="
+                              M20 55 L28 47
+                              M25 57 L33 49
+
+                              M67 53 L72 47
+                              M72 55 L77 50
+                            "
+                            fill="none"
+                            stroke={ink}
+                            strokeWidth="0.8"
+                            strokeLinecap="round"
+                            opacity="0.25"
+                          />
+                        </>
+                      )}
+
+                    {mountainStyle !== "rocky" && peakCount === 1 && (
+                      <>
+                        <path
+                          d={
+                            `M9 59 L50 ${mainPeakY} L91 59 Z`
+                          }
+                          fill={
+                            mountainFill
+                          }
+                          fillOpacity="0.88"
+                          stroke={ink}
+                          strokeWidth="3"
+                          strokeLinejoin="round"
+                        />
+
+                        <path
+                          d={
+                            `M50 ${mainPeakY} L41 30 L33 39`
+                          }
+                          fill="none"
+                          stroke={ink}
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          opacity="0.58"
+                        />
+                      </>
+                    )}
+
+                    {mountainStyle !== "rocky" && peakCount === 2 && (
+                      <>
+                        <path
+                          d="
+                            M5 59
+                            L32 25
+                            L55 59
+                            Z
+                          "
+                          fill={
+                            mountainFill
+                          }
+                          fillOpacity="0.82"
+                          stroke={ink}
+                          strokeWidth="2.7"
+                          strokeLinejoin="round"
+                        />
+
+                        <path
+                          d={
+                            `M32 59 L67 ${mainPeakY} L97 59 Z`
+                          }
+                          fill={
+                            mountainFill
+                          }
+                          fillOpacity="0.9"
+                          stroke={ink}
+                          strokeWidth="3"
+                          strokeLinejoin="round"
+                        />
+
+                        <path
+                          d="
+                            M32 25
+                            L25 39
+                            L19 44
+                          "
+                          fill="none"
+                          stroke={ink}
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          opacity="0.5"
+                        />
+
+                        <path
+                          d={
+                            `M67 ${mainPeakY} L57 31 L50 40`
+                          }
+                          fill="none"
+                          stroke={ink}
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          opacity="0.58"
+                        />
+                      </>
+                    )}
+
+                    {mountainStyle !== "rocky" && peakCount === 3 && (
+                      <>
+                        <path
+                          d="
+                            M2 59
+                            L23 31
+                            L43 59
+                            Z
+                          "
+                          fill={
+                            mountainFill
+                          }
+                          fillOpacity="0.8"
+                          stroke={ink}
+                          strokeWidth="2.5"
+                          strokeLinejoin="round"
+                        />
+
+                        <path
+                          d={
+                            `M23 59 L52 ${mainPeakY} L78 59 Z`
+                          }
+                          fill={
+                            mountainFill
+                          }
+                          fillOpacity="0.92"
+                          stroke={ink}
+                          strokeWidth="3"
+                          strokeLinejoin="round"
+                        />
+
+                        <path
+                          d="
+                            M59 59
+                            L80 27
+                            L99 59
+                            Z
+                          "
+                          fill={
+                            mountainFill
+                          }
+                          fillOpacity="0.82"
+                          stroke={ink}
+                          strokeWidth="2.5"
+                          strokeLinejoin="round"
+                        />
+
+                        <path
+                          d={
+                            `M52 ${mainPeakY} L43 30 L36 39`
+                          }
+                          fill="none"
+                          stroke={ink}
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          opacity="0.58"
+                        />
+
+                        <path
+                          d="
+                            M23 31
+                            L18 41
+                          "
+                          fill="none"
+                          stroke={ink}
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          opacity="0.48"
+                        />
+
+                        <path
+                          d="
+                            M80 27
+                            L74 40
+                          "
+                          fill="none"
+                          stroke={ink}
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          opacity="0.48"
+                        />
+                      </>
+                    )}
+                  </svg>
+                );
+              }
             );
           })()}
 
