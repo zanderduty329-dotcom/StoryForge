@@ -800,41 +800,6 @@ function terrainSymbol(
 }
 
 
-/*
- * FOREST ORGANIC SCATTER V1
- *
- * Use a larger irregular repeat field so the eye does not
- * immediately recognize rows or a tiny repeated stamp.
- */
-function storyForgeForestPatternMetrics(
-  detailTier:
-    | "overview"
-    | "standard"
-    | "detailed"
-    | "close"
-) {
-  if (detailTier === "overview") {
-    return { width: 18, height: 13 };
-  }
-
-  if (detailTier === "standard") {
-    return { width: 15.5, height: 11.2 };
-  }
-
-  if (detailTier === "detailed") {
-    return { width: 13.8, height: 9.8 };
-  }
-
-  return { width: 12.4, height: 8.8 };
-}
-
-type StoryForgeForestEntityPlacement = {
-  x: number;
-  y: number;
-  scale: number;
-  kind: "pine" | "oak";
-};
-
 function storyForgeForestPattern(
   style: string | undefined,
   ink: string,
@@ -843,221 +808,189 @@ function storyForgeForestPattern(
     | "overview"
     | "standard"
     | "detailed"
-    | "close" = "standard",
-    scatterVariant = 0,
-    placementsOverride?: StoryForgeForestEntityPlacement[]
-  ) {
+    | "close" = "standard"
+) {
   const selected =
     style ?? "ink-trees";
 
-  /*
-   * Tree artwork itself becomes physically smaller
-   * as the camera reveals more local forest detail.
-   */
-  const detailScale =
-    (
-      detailTier === "overview"
-        ? 1.06
-        : detailTier === "standard"
-          ? 1
-          : detailTier === "detailed"
-            ? 0.82
-            : 0.70
-    ) * 0.545;
+  type TreeSize =
+    | "small"
+    | "medium"
+    | "large";
 
   /*
-   * STORYFORGE FOREST ART
-   *
-   * Density and zoom logic live below this section
-   * and are intentionally left untouched.
-   *
-   * These helpers only control how individual trees
-   * look.
+   * These are now genuinely different tree drawings,
+   * not one tree simply scaled three different ways.
    */
-
   const pine = (
     x: number,
     y: number,
-    scale: number
+    scale: number,
+    size: TreeSize
   ) => {
-    /*
-     * Stable natural variation based on position.
-     * No Math.random(), so trees do not jump around
-     * when React rerenders.
-     */
-    const seed =
-      Math.sin(
-        x * 12.9898 +
-        y * 78.233
+    if (size === "small") {
+      return (
+        <g
+          transform={`translate(${x} ${y}) scale(${scale})`}
+          stroke={ink}
+          strokeWidth="0.28"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path
+            d="
+              M1.35 0.4
+              L0.55 1.95
+              L0.92 1.82
+              L0.30 3.10
+              L0.82 2.92
+              L0.18 4.25
+              L2.52 4.25
+              L1.88 2.92
+              L2.40 3.10
+              L1.78 1.82
+              L2.15 1.95
+              Z
+            "
+            fill={forestFill}
+            fillOpacity="0.86"
+          />
+
+          <path
+            d="
+              M1.35 1.55
+              L1.35 4.75
+            "
+            fill="none"
+            opacity="0.62"
+          />
+        </g>
       );
+    }
 
-    const lean =
-      seed * 2.2;
+    if (size === "large") {
+      return (
+        <g
+          transform={`translate(${x} ${y}) scale(${scale})`}
+          stroke={ink}
+          strokeWidth="0.32"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path
+            d="
+              M2.05 0.05
+              L0.72 2.18
+              L1.30 2.02
+              L0.28 3.95
+              L1.08 3.68
+              L0.02 6.05
+              L1.22 5.58
+              L0.22 7.42
+              L1.38 6.94
+              L0.52 8.25
+              L3.58 8.25
+              L2.72 6.94
+              L3.88 7.42
+              L2.88 5.58
+              L4.02 6.05
+              L2.96 3.68
+              L3.78 3.96
+              L2.76 2.02
+              L3.38 2.18
+              Z
+            "
+            fill={forestFill}
+            fillOpacity="0.90"
+          />
 
-    const xJitter =
-      seed * 0.34;
+          <path
+            d="
+              M2.05 2.0
+              L2.05 9.0
 
-    const yJitter =
-      Math.cos(
-        x * 17.31 +
-        y * 9.73
-      ) * 0.28;
+              M2.05 3.0
+              L1.12 3.80
+
+              M2.05 3.85
+              L3.02 4.62
+
+              M2.05 4.75
+              L0.98 5.62
+
+              M2.05 5.65
+              L3.15 6.42
+
+              M2.05 6.55
+              L1.00 7.35
+            "
+            fill="none"
+            opacity="0.74"
+          />
+
+          <path
+            d="
+              M0.45 8.62
+              C1.10 8.35 1.65 8.48 2.12 8.32
+              C2.70 8.14 3.30 8.36 3.72 8.58
+            "
+            fill="none"
+            opacity="0.28"
+          />
+        </g>
+      );
+    }
 
     /*
-     * Keep the forest artwork slightly smaller than
-     * the old stamped version.
+     * Medium StoryForge pine.
      */
-    const naturalScale =
-      scale *
-      detailScale *
-      (0.78 +
-        Math.abs(seed) * 0.05);
-
     return (
       <g
-        transform={
-          `translate(${x + xJitter} ${y + yJitter}) ` +
-          `rotate(${lean} 1.7 3.9) ` +
-          `scale(${naturalScale})`
-        }
+        transform={`translate(${x} ${y}) scale(${scale})`}
         stroke={ink}
+        strokeWidth="0.30"
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {/*
-          Main silhouette.
-
-          The left and right sides deliberately do
-          not mirror one another perfectly.
-        */}
         <path
           d="
-            M1.68 0.10
-
-            C1.40 0.72 1.07 1.25 0.68 1.91
-            L1.14 1.78
-
-            C0.84 2.30 0.46 2.93 0.19 3.58
-            L0.87 3.30
-
-            C0.58 3.98 0.25 4.70 0.02 5.45
-            L0.96 5.04
-
-            C0.77 5.63 0.46 6.26 0.24 6.77
-            L1.30 6.32
-
-            L0.70 7.18
-            L2.74 7.18
-
-            L2.20 6.28
-            L3.16 6.66
-
-            C2.93 6.05 2.63 5.48 2.46 4.97
-            L3.28 5.29
-
-            C3.04 4.54 2.72 3.92 2.47 3.27
-            L3.12 3.50
-
-            C2.87 2.86 2.51 2.26 2.24 1.76
-            L2.70 1.91
-
-            C2.34 1.29 2.00 0.70 1.68 0.10
+            M1.65 0.15
+            L0.45 2.18
+            L1.02 2.02
+            L0.18 3.78
+            L0.92 3.54
+            L0.02 5.72
+            L1.12 5.28
+            L0.35 6.62
+            L2.95 6.62
+            L2.18 5.28
+            L3.24 5.72
+            L2.36 3.54
+            L3.08 3.80
+            L2.26 2.02
+            L2.85 2.20
             Z
           "
           fill={forestFill}
           fillOpacity="0.88"
-          strokeWidth="0.30"
         />
 
-        {/*
-          Slightly darker lower foliage gives the
-          tree more depth without turning it into a
-          heavy realistic illustration.
-        */}
         <path
           d="
-            M0.26 5.42
-            C0.92 5.14 1.42 5.24 1.69 4.91
-            C2.04 5.21 2.56 5.05 3.02 5.28
+            M1.65 2.0
+            L1.65 7.45
 
-            L3.16 6.66
-            L2.20 6.28
-            L2.74 7.18
-            L0.70 7.18
-            L1.30 6.32
-            L0.24 6.77
-            Z
-          "
-          fill={ink}
-          fillOpacity="0.08"
-          stroke="none"
-        />
+            M1.65 3.35
+            L0.92 4.02
 
-        {/*
-          Trunk + irregular branch marks.
-        */}
-        <path
-          d="
-            M1.68 1.72
-            C1.65 3.14 1.70 5.08 1.69 7.72
+            M1.65 4.25
+            L2.34 4.86
 
-            M1.67 3.02
-            L0.96 3.62
-
-            M1.69 3.78
-            L2.39 4.29
-
-            M1.68 4.65
-            L0.82 5.28
-
-            M1.70 5.42
-            L2.50 5.93
+            M1.65 5.15
+            L0.82 5.80
           "
           fill="none"
-          strokeWidth="0.25"
-          opacity="0.66"
-        />
-
-        {/*
-          Small interior ridge lines give the pine
-          the same cartographic edge language as
-          StoryForge Peaks.
-        */}
-        <path
-          d="
-            M1.12 2.32
-            L1.53 1.34
-
-            M2.10 2.25
-            L1.78 1.26
-
-            M0.82 4.20
-            L1.48 3.38
-
-            M2.53 4.13
-            L1.86 3.34
-          "
-          fill="none"
-          strokeWidth="0.18"
-          opacity="0.32"
-        />
-
-        {/*
-          Subtle ground marks keep trees from
-          looking pasted onto the biome color.
-        */}
-        <path
-          d="
-            M0.48 7.42
-            C1.00 7.22 1.43 7.36 1.77 7.25
-            C2.18 7.10 2.61 7.24 3.00 7.40
-
-            M0.92 7.68
-            C1.42 7.53 1.98 7.57 2.47 7.66
-          "
-          fill="none"
-          strokeWidth="0.17"
-          opacity="0.22"
+          opacity="0.72"
         />
       </g>
     );
@@ -1066,414 +999,384 @@ function storyForgeForestPattern(
   const oak = (
     x: number,
     y: number,
-    scale: number
+    scale: number,
+    size: TreeSize
   ) => {
-    const seed =
-      Math.sin(
-        x * 19.173 +
-        y * 31.417
+    if (size === "small") {
+      return (
+        <g
+          transform={`translate(${x} ${y}) scale(${scale})`}
+          stroke={ink}
+          strokeWidth="0.28"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path
+            d="
+              M1.45 4.20
+              L1.45 2.85
+            "
+            fill="none"
+          />
+
+          <path
+            d="
+              M0.40 2.92
+              C0.08 2.35 0.42 1.82 0.92 1.72
+              C0.85 1.08 1.35 0.68 1.82 0.86
+              C2.20 0.34 2.92 0.52 3.00 1.10
+              C3.54 1.16 3.78 1.78 3.42 2.18
+              C3.76 2.72 3.38 3.20 2.88 3.12
+              C2.60 3.62 1.92 3.68 1.62 3.28
+              C1.12 3.62 0.48 3.44 0.40 2.92
+              Z
+            "
+            fill={forestFill}
+            fillOpacity="0.84"
+          />
+        </g>
       );
+    }
 
-    const lean =
-      seed * 1.8;
+    if (size === "large") {
+      return (
+        <g
+          transform={`translate(${x} ${y}) scale(${scale})`}
+          stroke={ink}
+          strokeWidth="0.32"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path
+            d="
+              M2.25 7.40
+              L2.25 4.28
 
-    const xJitter =
-      seed * 0.31;
+              M2.25 5.15
+              L1.10 3.82
 
-    const yJitter =
-      Math.cos(
-        x * 13.87 +
-        y * 21.41
-      ) * 0.25;
+              M2.25 4.92
+              L3.42 3.56
 
-    const naturalScale =
-      scale *
-      detailScale *
-      (0.79 +
-        Math.abs(seed) * 0.05);
+              M2.22 6.00
+              L1.48 5.12
 
+              M2.28 5.72
+              L3.08 4.92
+            "
+            fill="none"
+          />
+
+          <path
+            d="
+              M0.36 4.34
+              C-0.22 3.48 0.14 2.63 0.94 2.35
+              C0.58 1.48 1.28 0.72 2.02 0.92
+              C2.38 0.02 3.50 0.06 3.76 0.92
+              C4.70 0.66 5.36 1.46 5.06 2.26
+              C5.92 2.62 5.86 3.62 5.18 4.02
+              C5.34 4.90 4.42 5.44 3.74 5.04
+              C3.34 5.80 2.26 5.88 1.82 5.20
+              C1.04 5.66 0.08 5.22 0.36 4.34
+              Z
+            "
+            fill={forestFill}
+            fillOpacity="0.89"
+          />
+
+          <path
+            d="
+              M0.94 3.42
+              C1.62 2.88 2.18 3.02 2.62 2.42
+              C3.04 1.86 3.66 1.82 4.34 2.24
+
+              M1.20 4.28
+              C1.82 3.88 2.48 4.00 3.00 3.46
+            "
+            fill="none"
+            opacity="0.55"
+          />
+
+          <path
+            d="
+              M0.72 7.55
+              C1.38 7.28 2.02 7.48 2.58 7.32
+              C3.18 7.14 3.82 7.34 4.42 7.58
+            "
+            fill="none"
+            opacity="0.26"
+          />
+        </g>
+      );
+    }
+
+    /*
+     * Medium StoryForge oak.
+     */
     return (
       <g
-        transform={
-          `translate(${x + xJitter} ${y + yJitter}) ` +
-          `rotate(${lean} 2.0 3.5) ` +
-          `scale(${naturalScale})`
-        }
+        transform={`translate(${x} ${y}) scale(${scale})`}
         stroke={ink}
+        strokeWidth="0.30"
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {/*
-          Trunk first so it visually disappears
-          behind the canopy.
-        */}
         <path
           d="
-            M1.98 6.76
-            C1.94 5.84 2.02 4.80 1.96 3.78
+            M1.90 6.15
+            L1.90 3.90
 
-            M1.97 4.78
-            L1.12 3.63
+            M1.90 4.65
+            L1.05 3.55
 
-            M1.98 4.52
-            L2.84 3.39
-
-            M1.96 5.28
-            L1.40 4.66
-
-            M2.00 5.09
-            L2.57 4.46
+            M1.90 4.40
+            L2.72 3.38
           "
           fill="none"
-          strokeWidth="0.31"
         />
 
-        {/*
-          Irregular StoryForge canopy.
-
-          Instead of a circular cloud, it has
-          asymmetric lobes and a slightly uneven
-          lower edge.
-        */}
         <path
           d="
-            M0.48 4.13
-
-            C-0.06 3.60 0.12 2.86 0.71 2.55
-            C0.43 1.86 0.91 1.26 1.52 1.31
-
-            C1.66 0.57 2.35 0.25 2.86 0.75
-
-            C3.49 0.42 4.14 0.88 4.10 1.55
-
-            C4.78 1.60 5.07 2.24 4.72 2.72
-
-            C5.14 3.31 4.82 3.94 4.28 4.10
-
-            C4.18 4.80 3.41 5.12 2.88 4.74
-
-            C2.37 5.22 1.63 5.09 1.35 4.57
-
-            C0.92 4.72 0.62 4.52 0.48 4.13
+            M0.42 3.86
+            C-0.04 3.12 0.34 2.46 0.95 2.28
+            C0.72 1.48 1.27 0.86 1.92 1.02
+            C2.28 0.24 3.23 0.34 3.38 1.16
+            C4.08 1.12 4.42 1.86 4.03 2.42
+            C4.67 2.85 4.38 3.70 3.70 3.82
+            C3.70 4.58 2.86 4.91 2.34 4.48
+            C1.83 5.02 1.02 4.74 1.00 4.08
+            C0.78 4.08 0.58 4.00 0.42 3.86
             Z
           "
           fill={forestFill}
-          fillOpacity="0.87"
-          strokeWidth="0.30"
+          fillOpacity="0.86"
         />
 
-        {/*
-          Shadowed lower/right canopy plane.
-        */}
         <path
           d="
-            M1.34 4.56
-            C1.85 4.16 2.24 4.26 2.68 3.96
-
-            C3.18 4.25 3.74 4.07 4.27 4.10
-
-            C4.17 4.78 3.42 5.12 2.88 4.74
-
-            C2.38 5.21 1.63 5.09 1.34 4.56
-            Z
-          "
-          fill={ink}
-          fillOpacity="0.07"
-          stroke="none"
-        />
-
-        {/*
-          Canopy contour details.
-        */}
-        <path
-          d="
-            M0.95 3.25
-            C1.49 2.79 1.94 2.91 2.30 2.42
-
-            C2.70 1.88 3.20 1.86 3.72 2.18
-
-            M1.27 3.90
-            C1.74 3.53 2.17 3.59 2.49 3.27
-
-            M3.00 3.53
-            C3.34 3.17 3.69 3.12 4.04 3.32
+            M0.88 3.16
+            C1.42 2.74 1.90 2.90 2.25 2.36
+            C2.56 1.90 3.04 1.83 3.54 2.18
           "
           fill="none"
-          strokeWidth="0.20"
-          opacity="0.38"
-        />
-
-        {/*
-          Small bark lines.
-        */}
-        <path
-          d="
-            M1.82 5.36
-            L2.07 5.09
-
-            M1.81 5.83
-            L2.08 5.57
-
-            M1.83 6.28
-            L2.06 6.04
-          "
-          fill="none"
-          strokeWidth="0.15"
-          opacity="0.28"
-        />
-
-        {/*
-          Ground integration.
-        */}
-        <path
-          d="
-            M0.72 6.94
-            C1.22 6.72 1.69 6.88 2.05 6.76
-            C2.54 6.59 3.02 6.76 3.49 6.92
-
-            M1.14 7.20
-            C1.62 7.06 2.17 7.09 2.74 7.18
-          "
-          fill="none"
-          strokeWidth="0.17"
-          opacity="0.22"
+          opacity="0.58"
         />
       </g>
     );
   };
 
   /*
-   * Whole-tree map renderer.
+   * OVERVIEW
+   *
+   * Only the strongest landmark trees survive
+   * at distant world-map scale.
    */
-  if (placementsOverride) {
+  if (detailTier === "overview") {
+    if (selected === "pine") {
+      return (
+        <>
+          {pine(1.10, 0.40, 0.82, "large")}
+          {pine(7.10, 2.25, 0.72, "medium")}
+        </>
+      );
+    }
+
+    if (selected === "oak") {
+      return (
+        <>
+          {oak(1.00, 0.60, 0.88, "large")}
+          {oak(7.15, 2.35, 0.76, "medium")}
+        </>
+      );
+    }
+
+    if (selected === "mixed") {
+      return (
+        <>
+          {oak(0.80, 0.55, 0.84, "large")}
+          {pine(6.90, 1.80, 0.78, "large")}
+        </>
+      );
+    }
+
     return (
       <>
-        {placementsOverride.map(
-          (placement, index) => (
-            <g key={`forest-whole-tree-${index}`}>
-              {placement.kind === "pine"
-                ? pine(
-                    placement.x,
-                    placement.y,
-                    placement.scale
-                  )
-                : oak(
-                    placement.x,
-                    placement.y,
-                    placement.scale
-                  )}
-            </g>
-          )
-        )}
+        {oak(0.70, 0.60, 0.82, "large")}
+        {pine(6.70, 1.75, 0.76, "large")}
       </>
     );
   }
 
   /*
-   * FOREST ORGANIC SCATTER V1
+   * STANDARD
    *
-   * Stable pseudo-random placement:
-   * - no obvious rows
-   * - no Math.random()
-   * - trees do not jump on rerender
-   * - occasional size variation
+   * Large + medium trees establish the forest.
    */
-  const stableForestUnit = (
-    index: number,
-    salt: number
-  ) => {
-    const raw =
-      Math.sin(
-          (index + 1) * 12.9898 +
-            (
-              salt +
-              scatterVariant * 19.731
-            ) *
-              78.233
-        ) * 43758.5453;
-
-    return raw - Math.floor(raw);
-  };
-
-  const patternMetrics =
-    storyForgeForestPatternMetrics(
-      detailTier
-    );
-
-  const targetCount =
-    detailTier === "overview"
-      ? 8
-      : detailTier === "standard"
-        ? 13
-        : detailTier === "detailed"
-          ? 17
-          : 21;
-
-  const minimumSpacing =
-    detailTier === "overview"
-      ? 2.8
-      : detailTier === "standard"
-        ? 2.15
-        : detailTier === "detailed"
-          ? 1.75
-          : 1.48;
-
-  type ForestScatterPoint = {
-    x: number;
-    y: number;
-    scale: number;
-    kind: "pine" | "oak";
-  };
-
-  const placements: ForestScatterPoint[] =
-    [];
-
-  const usableWidth =
-    Math.max(
-      1,
-      patternMetrics.width - 2.8
-    );
-
-  const usableHeight =
-    Math.max(
-      1,
-      patternMetrics.height - 3.4
-    );
-
-  let attempt = 0;
-
-  while (
-    placements.length < targetCount &&
-    attempt < targetCount * 80
-  ) {
-    /*
-     * Independent X/Y sequences prevent the points from
-     * settling into diagonal or horizontal bands.
-     */
-    const x =
-      0.35 +
-      stableForestUnit(
-        attempt,
-        1.731
-      ) *
-        usableWidth;
-
-    const y =
-      0.25 +
-      stableForestUnit(
-        attempt,
-        8.413
-      ) *
-        usableHeight;
-
-    const sizeSeed =
-      stableForestUnit(
-        attempt,
-        4.927
+  if (detailTier === "standard") {
+    if (selected === "pine") {
+      return (
+        <>
+          {pine(0.20, 0.45, 0.72, "large")}
+          {pine(4.55, 0.55, 0.90, "medium")}
+          {pine(7.75, 2.05, 0.72, "medium")}
+        </>
       );
-
-    /*
-     * Mostly small trees, some medium trees, and an
-     * occasional slightly larger interior tree.
-     */
-    const treeScale =
-      0.69 +
-      sizeSeed * 0.27 +
-      (
-        sizeSeed > 0.93
-          ? 0.12
-          : 0
-      );
-
-    const hasRoom =
-      placements.every(
-        (existing) => {
-          const dx =
-            existing.x - x;
-
-          const dy =
-            existing.y - y;
-
-          /*
-           * Unequal X/Y weighting deliberately breaks
-           * the visual rhythm of rows.
-           */
-          const distance =
-            Math.sqrt(
-              dx * dx +
-                dy * dy * 1.24
-            );
-
-          return (
-            distance >=
-            minimumSpacing
-          );
-        }
-      );
-
-    if (hasRoom) {
-      let kind: "pine" | "oak";
-
-      if (selected === "pine") {
-        kind = "pine";
-      } else if (selected === "oak") {
-        kind = "oak";
-      } else if (selected === "mixed") {
-        kind =
-          stableForestUnit(
-            attempt,
-            12.13
-          ) > 0.5
-            ? "pine"
-            : "oak";
-      } else {
-        kind =
-          stableForestUnit(
-            attempt,
-            17.71
-          ) > 0.43
-            ? "pine"
-            : "oak";
-      }
-
-      placements.push({
-        x,
-        y,
-        scale: treeScale,
-        kind,
-      });
     }
 
-    attempt += 1;
+    if (selected === "oak") {
+      return (
+        <>
+          {oak(0.15, 0.65, 0.76, "large")}
+          {oak(4.75, 0.55, 0.90, "medium")}
+          {oak(8.05, 2.15, 0.70, "medium")}
+        </>
+      );
+    }
+
+    if (selected === "mixed") {
+      return (
+        <>
+          {oak(0.10, 0.65, 0.74, "large")}
+          {pine(4.25, 0.50, 0.86, "medium")}
+          {oak(7.55, 2.05, 0.68, "medium")}
+        </>
+      );
+    }
+
+    return (
+      <>
+        {oak(0.10, 0.60, 0.74, "large")}
+        {pine(4.05, 0.45, 0.84, "medium")}
+        {oak(7.45, 2.05, 0.66, "medium")}
+      </>
+    );
+  }
+
+  /*
+   * DETAILED
+   *
+   * Small understory trees begin appearing between
+   * the established large and medium trees.
+   */
+  if (detailTier === "detailed") {
+    if (selected === "pine") {
+      return (
+        <>
+          {pine(0.10, 0.25, 0.64, "large")}
+          {pine(3.70, 0.55, 0.78, "medium")}
+          {pine(6.45, 1.20, 0.68, "medium")}
+          {pine(2.25, 4.15, 0.62, "small")}
+          {pine(5.15, 4.10, 0.58, "small")}
+          {pine(7.30, 4.55, 0.50, "small")}
+        </>
+      );
+    }
+
+    if (selected === "oak") {
+      return (
+        <>
+          {oak(0.10, 0.35, 0.66, "large")}
+          {oak(3.75, 0.60, 0.78, "medium")}
+          {oak(6.55, 1.35, 0.68, "medium")}
+          {oak(2.10, 4.10, 0.60, "small")}
+          {oak(4.95, 4.05, 0.56, "small")}
+          {oak(7.10, 4.45, 0.48, "small")}
+        </>
+      );
+    }
+
+    if (selected === "mixed") {
+      return (
+        <>
+          {oak(0.05, 0.35, 0.64, "large")}
+          {pine(3.60, 0.55, 0.76, "medium")}
+          {oak(6.40, 1.25, 0.66, "medium")}
+          {pine(2.10, 4.20, 0.58, "small")}
+          {oak(4.95, 4.00, 0.56, "small")}
+          {pine(7.15, 4.40, 0.48, "small")}
+        </>
+      );
+    }
+
+    return (
+      <>
+        {oak(0.05, 0.35, 0.64, "large")}
+        {pine(3.55, 0.50, 0.76, "medium")}
+        {oak(6.35, 1.20, 0.66, "medium")}
+        {pine(2.10, 4.15, 0.56, "small")}
+        {oak(4.90, 4.00, 0.54, "small")}
+        {pine(7.05, 4.40, 0.46, "small")}
+      </>
+    );
+  }
+
+  /*
+   * CLOSE
+   *
+   * Rich local woodland:
+   * large anchors, medium canopy and small understory.
+   */
+  if (selected === "pine") {
+    return (
+      <>
+        {pine(0.05, 0.20, 0.58, "large")}
+        {pine(3.10, 0.35, 0.68, "medium")}
+        {pine(5.75, 1.00, 0.60, "medium")}
+
+        {pine(1.55, 3.75, 0.54, "small")}
+        {pine(3.95, 3.90, 0.50, "small")}
+        {pine(6.45, 3.75, 0.48, "small")}
+        {pine(0.65, 5.35, 0.44, "small")}
+        {pine(5.05, 5.30, 0.42, "small")}
+      </>
+    );
+  }
+
+  if (selected === "oak") {
+    return (
+      <>
+        {oak(0.05, 0.25, 0.60, "large")}
+        {oak(3.10, 0.45, 0.68, "medium")}
+        {oak(5.80, 1.10, 0.60, "medium")}
+
+        {oak(1.45, 3.75, 0.52, "small")}
+        {oak(3.90, 3.90, 0.48, "small")}
+        {oak(6.35, 3.80, 0.46, "small")}
+        {oak(0.60, 5.30, 0.42, "small")}
+        {oak(5.00, 5.25, 0.40, "small")}
+      </>
+    );
+  }
+
+  if (selected === "mixed") {
+    return (
+      <>
+        {oak(0.05, 0.25, 0.58, "large")}
+        {pine(3.05, 0.35, 0.66, "medium")}
+        {oak(5.75, 1.05, 0.58, "medium")}
+
+        {pine(1.45, 3.75, 0.50, "small")}
+        {oak(3.85, 3.90, 0.48, "small")}
+        {pine(6.30, 3.75, 0.46, "small")}
+        {oak(0.55, 5.25, 0.42, "small")}
+        {pine(4.95, 5.20, 0.40, "small")}
+      </>
+    );
   }
 
   return (
     <>
-      {placements.map(
-        (
-          placement,
-          index
-        ) => (
-          <g
-            key={`forest-tree-${index}`}
-          >
-            {placement.kind === "pine"
-              ? pine(
-                  placement.x,
-                  placement.y,
-                  placement.scale
-                )
-              : oak(
-                  placement.x,
-                  placement.y,
-                  placement.scale
-                )}
-          </g>
-        )
-      )}
+      {oak(0.05, 0.25, 0.58, "large")}
+      {pine(3.00, 0.35, 0.66, "medium")}
+      {oak(5.70, 1.05, 0.58, "medium")}
+
+      {pine(1.45, 3.75, 0.50, "small")}
+      {oak(3.80, 3.90, 0.48, "small")}
+      {pine(6.25, 3.75, 0.46, "small")}
+      {oak(0.55, 5.25, 0.42, "small")}
+      {pine(4.90, 5.20, 0.40, "small")}
     </>
   );
-
 }
 
 function terrainTexture(
@@ -1793,1262 +1696,6 @@ function curveGeometryForSegment(
         secondBendStrength *
         secondDirection,
   };
-}
-
-
-
-type StoryForgeBiomeSymbolPlacement = {
-  x: number;
-  y: number;
-  scale: number;
-  rotation: number;
-};
-
-
-function buildStoryForgeBiomeSymbolEntities(
-  map: StoryMap,
-  cells: Set<string>,
-  columns: number,
-  rows: number,
-  terrainType: TerrainType,
-  detailTier:
-    | "overview"
-    | "standard"
-    | "detailed"
-    | "close"
-): StoryForgeBiomeSymbolPlacement[] {
-  const biomeCells =
-    new Set<string>();
-
-  cells.forEach((key) => {
-    const {
-      column,
-      row,
-    } = parseCellKey(key);
-
-    biomeCells.add(
-      `${column}:${row}`
-    );
-  });
-
-  if (biomeCells.size === 0) {
-    return [];
-  }
-
-  const unit = (
-    index: number,
-    salt: number
-  ) => {
-    const raw =
-      Math.sin(
-        (index + 1) * 12.9898 +
-        salt * 78.233
-      ) * 43758.5453;
-
-    return raw - Math.floor(raw);
-  };
-
-
-  const hasCell = (
-    column: number,
-    row: number
-  ) =>
-    column >= 0 &&
-    row >= 0 &&
-    column < columns &&
-    row < rows &&
-    biomeCells.has(
-      `${column}:${row}`
-    );
-
-
-  const pointIsBiome = (
-    x: number,
-    y: number
-  ) => {
-    if (
-      x < 0 ||
-      y < 0 ||
-      x >= 100 ||
-      y >= 100
-    ) {
-      return false;
-    }
-
-    return hasCell(
-      Math.floor(
-        (x / 100) * columns
-      ),
-      Math.floor(
-        (y / 100) * rows
-      )
-    );
-  };
-
-
-  /*
-   * Different biomes want different visual density.
-   */
-  const standardSpacing =
-    terrainType === "plains"
-      ? 2.20
-      : terrainType === "swamp"
-        ? 2.48
-        : terrainType === "desert"
-          ? 2.72
-          : 2.65;
-
-  const zoomMultiplier =
-    detailTier === "overview"
-      ? 1.30
-      : detailTier === "standard"
-        ? 1
-        : detailTier === "detailed"
-          ? 0.89
-          : 0.80;
-
-  const spacing =
-    standardSpacing *
-    zoomMultiplier;
-
-
-  /*
-   * Roads and rivers become collision segments.
-   */
-  const pathSegments: Array<{
-    ax: number;
-    ay: number;
-    bx: number;
-    by: number;
-    clearance: number;
-  }> = [];
-
-  (map.paths ?? []).forEach(
-    (mapPath) => {
-      for (
-        let index = 1;
-        index < mapPath.points.length;
-        index += 1
-      ) {
-        const previous =
-          mapPath.points[index - 1];
-
-        const current =
-          mapPath.points[index];
-
-        const clearance =
-          mapPath.width / 2 +
-          (
-            mapPath.kind === "river"
-              ? 0.70
-              : 0.50
-          );
-
-        if (
-          !current.curveFromPrevious
-        ) {
-          pathSegments.push({
-            ax: previous.x,
-            ay: previous.y,
-            bx: current.x,
-            by: current.y,
-            clearance,
-          });
-
-          continue;
-        }
-
-        const curve =
-          curveGeometryForSegment(
-            mapPath.kind,
-            previous,
-            current,
-            index
-          );
-
-        let lastX =
-          previous.x;
-
-        let lastY =
-          previous.y;
-
-        for (
-          let sample = 1;
-          sample <= 10;
-          sample += 1
-        ) {
-          const t =
-            sample / 10;
-
-          const inverse =
-            1 - t;
-
-          const x =
-            inverse * inverse * inverse *
-              previous.x +
-            3 * inverse * inverse * t *
-              curve.control1X +
-            3 * inverse * t * t *
-              curve.control2X +
-            t * t * t *
-              current.x;
-
-          const y =
-            inverse * inverse * inverse *
-              previous.y +
-            3 * inverse * inverse * t *
-              curve.control1Y +
-            3 * inverse * t * t *
-              curve.control2Y +
-            t * t * t *
-              current.y;
-
-          pathSegments.push({
-            ax: lastX,
-            ay: lastY,
-            bx: x,
-            by: y,
-            clearance,
-          });
-
-          lastX = x;
-          lastY = y;
-        }
-      }
-    }
-  );
-
-
-  const pointSegmentDistance = (
-    px: number,
-    py: number,
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number
-  ) => {
-    const dx = bx - ax;
-    const dy = by - ay;
-
-    const lengthSquared =
-      dx * dx + dy * dy;
-
-    if (
-      lengthSquared <
-      0.000001
-    ) {
-      return Math.hypot(
-        px - ax,
-        py - ay
-      );
-    }
-
-    const t =
-      Math.max(
-        0,
-        Math.min(
-          1,
-          (
-            (px - ax) * dx +
-            (py - ay) * dy
-          ) /
-            lengthSquared
-        )
-      );
-
-    return Math.hypot(
-      px - (ax + dx * t),
-      py - (ay + dy * t)
-    );
-  };
-
-
-  const placements:
-    StoryForgeBiomeSymbolPlacement[] =
-      [];
-
-  const gridColumns =
-    Math.ceil(
-      100 / spacing
-    );
-
-  const gridRows =
-    Math.ceil(
-      100 / spacing
-    );
-
-
-  for (
-    let gridY = 0;
-    gridY < gridRows;
-    gridY += 1
-  ) {
-    for (
-      let gridX = 0;
-      gridX < gridColumns;
-      gridX += 1
-    ) {
-      const index =
-        gridY *
-          gridColumns +
-        gridX;
-
-      const baseX =
-        (gridX + 0.5) *
-          spacing +
-        (
-          unit(index, 4.71) -
-          0.5
-        ) *
-          spacing *
-          0.70;
-
-      const baseY =
-        (gridY + 0.5) *
-          spacing +
-        (
-          unit(index, 11.83) -
-          0.5
-        ) *
-          spacing *
-          0.70;
-
-      if (
-        !pointIsBiome(
-          baseX,
-          baseY
-        )
-      ) {
-        continue;
-      }
-
-
-      const column =
-        Math.floor(
-          (baseX / 100) *
-            columns
-        );
-
-      const row =
-        Math.floor(
-          (baseY / 100) *
-            rows
-        );
-
-
-      let neighbors = 0;
-
-      for (
-        let dy = -1;
-        dy <= 1;
-        dy += 1
-      ) {
-        for (
-          let dx = -1;
-          dx <= 1;
-          dx += 1
-        ) {
-          if (
-            dx === 0 &&
-            dy === 0
-          ) {
-            continue;
-          }
-
-          if (
-            hasCell(
-              column + dx,
-              row + dy
-            )
-          ) {
-            neighbors += 1;
-          }
-        }
-      }
-
-
-      const baseDensity =
-        neighbors >= 8
-          ? 0.93
-          : neighbors >= 6
-            ? 0.78
-            : neighbors >= 4
-              ? 0.57
-              : neighbors >= 2
-                ? 0.36
-                : 0.18;
-
-
-      const biomeDensity =
-        terrainType === "plains"
-          ? 1.05
-          : terrainType === "swamp"
-            ? 0.96
-            : terrainType === "desert"
-              ? 0.88
-              : 0.84;
-
-
-      if (
-        unit(index, 17.29) >
-        Math.min(
-          0.98,
-          baseDensity *
-            biomeDensity
-        )
-      ) {
-        continue;
-      }
-
-
-      const sizeSeed =
-        unit(index, 23.41);
-
-      let scale =
-        0.82 +
-        sizeSeed * 0.25;
-
-      if (
-        neighbors <= 3
-      ) {
-        scale *= 0.86;
-      }
-
-
-      const radius =
-        spacing *
-        0.17 *
-        scale;
-
-
-      const shift =
-        spacing * 0.38;
-
-      const angle =
-        unit(index, 29.73) *
-        Math.PI *
-        2;
-
-
-      const offsets = [
-        [0, 0],
-
-        [
-          Math.cos(angle) *
-            shift * 0.5,
-          Math.sin(angle) *
-            shift * 0.5,
-        ],
-
-        [
-          Math.cos(angle + 2.1) *
-            shift * 0.5,
-          Math.sin(angle + 2.1) *
-            shift * 0.5,
-        ],
-
-        [
-          Math.cos(angle - 2.1) *
-            shift * 0.5,
-          Math.sin(angle - 2.1) *
-            shift * 0.5,
-        ],
-
-        [
-          Math.cos(angle) *
-            shift,
-          Math.sin(angle) *
-            shift,
-        ],
-
-        [
-          Math.cos(angle + 2.1) *
-            shift,
-          Math.sin(angle + 2.1) *
-            shift,
-        ],
-
-        [
-          Math.cos(angle - 2.1) *
-            shift,
-          Math.sin(angle - 2.1) *
-            shift,
-        ],
-      ];
-
-
-      let accepted:
-        {
-          x: number;
-          y: number;
-        } |
-        null = null;
-
-
-      for (
-        const [offsetX, offsetY]
-        of offsets
-      ) {
-        const x =
-          baseX + offsetX;
-
-        const y =
-          baseY + offsetY;
-
-
-        const probes = [
-          [x, y],
-          [x - radius, y],
-          [x + radius, y],
-          [x, y - radius],
-          [x, y + radius],
-        ];
-
-
-        if (
-          probes.some(
-            ([px, py]) =>
-              !pointIsBiome(
-                px,
-                py
-              ) ||
-              !pointIsLand(
-                map,
-                px,
-                py
-              )
-          )
-        ) {
-          continue;
-        }
-
-
-        let blocked = false;
-
-
-        /*
-         * Roads and rivers.
-         */
-        for (
-          const segment
-          of pathSegments
-        ) {
-          if (
-            pointSegmentDistance(
-              x,
-              y,
-              segment.ax,
-              segment.ay,
-              segment.bx,
-              segment.by
-            ) <
-            segment.clearance +
-              radius +
-              0.18
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-
-        /*
-         * Mountains use the same tightened 10% rule
-         * already approved for Forest.
-         */
-        for (
-          const stamp
-          of map.terrain
-        ) {
-          if (
-            stamp.type !==
-            "mountain"
-          ) {
-            continue;
-          }
-
-          const clearance =
-            (
-              Math.max(
-                0.95,
-                stamp.size * 0.39
-              ) +
-              0.45 +
-              radius * 0.70
-            ) *
-            0.90;
-
-          if (
-            Math.hypot(
-              x - stamp.x,
-              y - stamp.y
-            ) <
-            clearance
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-
-        /*
-         * Locations.
-         */
-        for (
-          const location
-          of (map.locations ?? [])
-        ) {
-          const clearance =
-            location.size === "large"
-              ? 2.2
-              : location.size === "medium"
-                ? 1.7
-                : location.size === "tiny"
-                  ? 0.9
-                  : 1.25;
-
-          if (
-            Math.hypot(
-              x - location.x,
-              y - location.y
-            ) <
-            clearance +
-              radius +
-              0.18
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-
-        /*
-         * Keep direct symbols from sitting on top of
-         * already accepted symbols.
-         */
-        if (
-          placements.some(
-            (existing) =>
-              Math.hypot(
-                existing.x - x,
-                existing.y - y
-              ) <
-              spacing * 0.44
-          )
-        ) {
-          continue;
-        }
-
-
-        accepted = {
-          x,
-          y,
-        };
-
-        break;
-      }
-
-
-      if (!accepted) {
-        continue;
-      }
-
-
-      placements.push({
-        x: accepted.x,
-        y: accepted.y,
-        scale,
-        rotation:
-          (
-            unit(index, 41.63) -
-            0.5
-          ) *
-          8,
-      });
-
-
-      if (
-        placements.length >=
-        1800
-      ) {
-        return placements;
-      }
-    }
-  }
-
-
-  return placements;
-}
-
-
-function buildStoryForgeForestEntities(
-  map: StoryMap,
-  cells: Set<string>,
-  columns: number,
-  rows: number,
-  style: string | undefined,
-  detailTier:
-    | "overview"
-    | "standard"
-    | "detailed"
-    | "close"
-): StoryForgeForestEntityPlacement[] {
-  const forest = new Set<string>();
-
-  cells.forEach((key) => {
-    const { column, row } =
-      parseCellKey(key);
-
-    forest.add(`${column}:${row}`);
-  });
-
-  const unit = (
-    index: number,
-    salt: number
-  ) => {
-    const raw =
-      Math.sin(
-        (index + 1) * 12.9898 +
-          salt * 78.233
-      ) * 43758.5453;
-
-    return raw - Math.floor(raw);
-  };
-
-  const hasCell = (
-    column: number,
-    row: number
-  ) =>
-    column >= 0 &&
-    row >= 0 &&
-    column < columns &&
-    row < rows &&
-    forest.has(`${column}:${row}`);
-
-  const inForest = (
-    x: number,
-    y: number
-  ) => {
-    if (
-      x < 0 ||
-      y < 0 ||
-      x >= 100 ||
-      y >= 100
-    ) {
-      return false;
-    }
-
-    return hasCell(
-      Math.floor((x / 100) * columns),
-      Math.floor((y / 100) * rows)
-    );
-  };
-
-  const pointSegmentDistance = (
-    px: number,
-    py: number,
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number
-  ) => {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const lengthSquared =
-      dx * dx + dy * dy;
-
-    if (lengthSquared < 0.000001) {
-      return Math.hypot(
-        px - ax,
-        py - ay
-      );
-    }
-
-    const t = Math.max(
-      0,
-      Math.min(
-        1,
-        (
-          (px - ax) * dx +
-          (py - ay) * dy
-        ) / lengthSquared
-      )
-    );
-
-    return Math.hypot(
-      px - (ax + dx * t),
-      py - (ay + dy * t)
-    );
-  };
-
-  /*
-   * Convert roads/rivers, including curved segments,
-   * into short collision segments.
-   */
-  const pathSegments: Array<{
-    ax: number;
-    ay: number;
-    bx: number;
-    by: number;
-    clearance: number;
-  }> = [];
-
-  (map.paths ?? []).forEach((mapPath) => {
-    for (
-      let i = 1;
-      i < mapPath.points.length;
-      i += 1
-    ) {
-      const a = mapPath.points[i - 1];
-      const b = mapPath.points[i];
-
-      const clearance =
-        mapPath.width / 2 +
-        (mapPath.kind === "river"
-          ? 0.82
-          : 0.58);
-
-      if (!b.curveFromPrevious) {
-        pathSegments.push({
-          ax: a.x,
-          ay: a.y,
-          bx: b.x,
-          by: b.y,
-          clearance,
-        });
-        continue;
-      }
-
-      const curve =
-        curveGeometryForSegment(
-          mapPath.kind,
-          a,
-          b,
-          i
-        );
-
-      let lastX = a.x;
-      let lastY = a.y;
-
-      for (
-        let sample = 1;
-        sample <= 10;
-        sample += 1
-      ) {
-        const t = sample / 10;
-        const u = 1 - t;
-
-        const x =
-          u * u * u * a.x +
-          3 * u * u * t *
-            curve.control1X +
-          3 * u * t * t *
-            curve.control2X +
-          t * t * t * b.x;
-
-        const y =
-          u * u * u * a.y +
-          3 * u * u * t *
-            curve.control1Y +
-          3 * u * t * t *
-            curve.control2Y +
-          t * t * t * b.y;
-
-        pathSegments.push({
-          ax: lastX,
-          ay: lastY,
-          bx: x,
-          by: y,
-          clearance,
-        });
-
-        lastX = x;
-        lastY = y;
-      }
-    }
-  });
-
-  /*
-   * 100% zoom is deliberately denser than the old stamp.
-   */
-  const spacing =
-    detailTier === "overview"
-      ? 3.45
-      : detailTier === "standard"
-        ? 2.28
-        : detailTier === "detailed"
-          ? 2.03
-          : 1.82;
-
-  const gridColumns =
-    Math.ceil(100 / spacing);
-
-  const gridRows =
-    Math.ceil(100 / spacing);
-
-  const placements:
-    StoryForgeForestEntityPlacement[] =
-      [];
-
-  for (
-    let gy = 0;
-    gy < gridRows;
-    gy += 1
-  ) {
-    for (
-      let gx = 0;
-      gx < gridColumns;
-      gx += 1
-    ) {
-      const index =
-        gy * gridColumns + gx;
-
-      const baseX =
-        (gx + 0.5) * spacing +
-        (unit(index, 3.17) - 0.5) *
-          spacing * 0.68;
-
-      const baseY =
-        (gy + 0.5) * spacing +
-        (unit(index, 9.41) - 0.5) *
-          spacing * 0.68;
-
-      if (!inForest(baseX, baseY)) {
-        continue;
-      }
-
-      const column =
-        Math.floor(
-          (baseX / 100) * columns
-        );
-
-      const row =
-        Math.floor(
-          (baseY / 100) * rows
-        );
-
-      let neighbors = 0;
-
-      for (
-        let dy = -1;
-        dy <= 1;
-        dy += 1
-      ) {
-        for (
-          let dx = -1;
-          dx <= 1;
-          dx += 1
-        ) {
-          if (dx === 0 && dy === 0) {
-            continue;
-          }
-
-          if (
-            hasCell(
-              column + dx,
-              row + dy
-            )
-          ) {
-            neighbors += 1;
-          }
-        }
-      }
-
-      const density =
-        neighbors >= 8
-          ? 0.97
-          : neighbors >= 6
-            ? 0.84
-            : neighbors >= 4
-              ? 0.64
-              : neighbors >= 2
-                ? 0.42
-                : 0.21;
-
-      if (
-        unit(index, 14.77) >
-        density
-      ) {
-        continue;
-      }
-
-      const sizeSeed =
-        unit(index, 21.37);
-
-      let scale =
-        0.67 +
-        sizeSeed * 0.27;
-
-      if (
-        neighbors >= 7 &&
-        sizeSeed > 0.91
-      ) {
-        scale += 0.14;
-      }
-
-      if (neighbors <= 3) {
-        scale *= 0.80;
-      } else if (neighbors <= 5) {
-        scale *= 0.90;
-      }
-
-      const side =
-        0.43 + scale * 0.27;
-
-      const down =
-        1.10 + scale * 0.68;
-
-      /*
-       * If blocked, try shifting the entire tree to one
-       * of three nearby locations.
-       */
-      const shift =
-        spacing * 0.40;
-
-      const angle =
-        unit(index, 26.43) *
-        Math.PI * 2;
-
-      const offsets = [
-        [0, 0],
-
-        /*
-         * Small local adjustments first.
-         */
-        [
-          Math.cos(angle) *
-            shift * 0.52,
-          Math.sin(angle) *
-            shift * 0.52,
-        ],
-        [
-          Math.cos(angle + 2.1) *
-            shift * 0.52,
-          Math.sin(angle + 2.1) *
-            shift * 0.52,
-        ],
-        [
-          Math.cos(angle - 2.1) *
-            shift * 0.52,
-          Math.sin(angle - 2.1) *
-            shift * 0.52,
-        ],
-
-        /*
-         * Then try the wider moves when a mountain,
-         * road, river, or settlement needs more room.
-         */
-        [
-          Math.cos(angle) * shift,
-          Math.sin(angle) * shift,
-        ],
-        [
-          Math.cos(angle + 2.1) *
-            shift,
-          Math.sin(angle + 2.1) *
-            shift,
-        ],
-        [
-          Math.cos(angle - 2.1) *
-            shift,
-          Math.sin(angle - 2.1) *
-            shift,
-        ],
-      ];
-
-      let accepted:
-        { x: number; y: number } |
-        null = null;
-
-      for (
-        const [offsetX, offsetY]
-        of offsets
-      ) {
-        const x =
-          baseX + offsetX;
-
-        const y =
-          baseY + offsetY;
-
-        const probes = [
-          [x, y],
-          [x - side, y + 0.45],
-          [x + side, y + 0.45],
-          [x, y + down],
-        ];
-
-        /*
-         * Whole tree must fit forest + land.
-         */
-        if (
-          probes.some(
-            ([px, py]) =>
-              !inForest(px, py) ||
-              !pointIsLand(
-                map,
-                px,
-                py
-              )
-          )
-        ) {
-          continue;
-        }
-
-        const centerX = x;
-        const centerY =
-          y + down * 0.48;
-
-        let blocked = false;
-
-        for (
-          const segment of pathSegments
-        ) {
-          if (
-            pointSegmentDistance(
-              centerX,
-              centerY,
-              segment.ax,
-              segment.ay,
-              segment.bx,
-              segment.by
-            ) <
-            segment.clearance +
-              0.48 +
-              scale * 0.24
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-        for (
-          const stamp of map.terrain
-        ) {
-          if (
-            stamp.type !== "mountain"
-          ) {
-            continue;
-          }
-
-          /*
-           * Mountains still keep a readable clearing,
-           * but trees may grow about 10% closer than
-           * before. Coastline behavior is unchanged.
-           */
-          const clearance =
-            (
-              Math.max(
-                0.95,
-                stamp.size * 0.39
-              ) +
-              0.45 +
-              scale * 0.22
-            ) *
-            0.90;
-
-          if (
-            Math.hypot(
-              centerX - stamp.x,
-              centerY - stamp.y
-            ) < clearance
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-        for (
-          const location
-          of (map.locations ?? [])
-        ) {
-          const clearance =
-            location.size === "large"
-              ? 2.2
-              : location.size === "medium"
-                ? 1.7
-                : location.size === "tiny"
-                  ? 0.9
-                  : 1.25;
-
-          if (
-            Math.hypot(
-              centerX - location.x,
-              centerY - location.y
-            ) <
-            clearance +
-              0.45 +
-              scale * 0.22
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (!blocked) {
-          accepted = { x, y };
-          break;
-        }
-      }
-
-      if (!accepted) {
-        continue;
-      }
-
-      let kind:
-        "pine" | "oak";
-
-      if (style === "pine") {
-        kind = "pine";
-      } else if (style === "oak") {
-        kind = "oak";
-      } else if (style === "mixed") {
-        kind =
-          unit(index, 31.91) > 0.5
-            ? "pine"
-            : "oak";
-      } else {
-        kind =
-          unit(index, 37.13) > 0.43
-            ? "pine"
-            : "oak";
-      }
-
-      placements.push({
-        x: accepted.x,
-        y: accepted.y,
-        scale,
-        kind,
-      });
-
-      if (
-        placements.length >= 1800
-      ) {
-        return placements;
-      }
-    }
-  }
-
-  return placements;
 }
 
 
@@ -8993,17 +7640,6 @@ export function MapPage({
                   const symbolMaskId =
                     `sf-area-symbol-mask-${safeKey}`;
 
-                  /*
-                   * FOREST ENVIRONMENT AWARENESS V1
-                   *
-                   * Forest color still follows the painted biome.
-                   * Tree symbols receive a second mask so they can
-                   * thin naturally around map features without
-                   * changing the underlying forest biome.
-                   */
-                  const forestAwareSymbolMaskId =
-                    `sf-area-forest-aware-symbol-mask-${safeKey}`;
-
 const landMaskId =
                     `sf-area-land-mask-${safeKey}`;
 
@@ -9369,249 +8005,6 @@ const landMaskId =
                       </mask>
 
                         {/*
-                          FOREST ENVIRONMENT AWARENESS V1
-
-                          White = normal tree visibility.
-                          Gray = transition / thinning zone.
-                          Black = clear corridor.
-
-                          This keeps dense woodland in broad open
-                          areas while giving mountains, roads,
-                          rivers, and settlements breathing room.
-                        */}
-                        {group.terrainType === "forest" && (
-                          <mask
-                            id={forestAwareSymbolMaskId}
-                            maskUnits="userSpaceOnUse"
-                            x="0"
-                            y="0"
-                            width="100"
-                            height="100"
-                            style={{
-                              maskType: "luminance",
-                            }}
-                          >
-                            {/*
-                              Begin with the existing organic
-                              forest-symbol boundary.
-                            */}
-                            <rect
-                              x="0"
-                              y="0"
-                              width="100"
-                              height="100"
-                              fill="white"
-                              mask={`url(#${symbolMaskId})`}
-                            />
-
-                            {/*
-                              Roads and rivers create two zones:
-
-                              gray outer corridor = fewer trees
-                              black inner corridor = no trees
-
-                              Width responds to the path's own
-                              configured width.
-                            */}
-                            {(activeMap.paths ?? []).map(
-                              (mapPath) => {
-                                if (
-                                  mapPath.points.length < 2
-                                ) {
-                                  return null;
-                                }
-
-                                const d =
-                                  buildMapPathD(
-                                    mapPath.kind,
-                                    mapPath.points
-                                  );
-
-                                const transitionWidth =
-                                  Math.max(
-                                    mapPath.width +
-                                      (mapPath.kind ===
-                                      "river"
-                                        ? 2.0
-                                        : 1.55),
-                                    mapPath.kind ===
-                                    "river"
-                                      ? 2.5
-                                      : 1.8
-                                  );
-
-                                const clearWidth =
-                                  Math.max(
-                                    mapPath.width +
-                                      (mapPath.kind ===
-                                      "river"
-                                        ? 0.72
-                                        : 0.52),
-                                    mapPath.kind ===
-                                    "river"
-                                      ? 1.25
-                                      : 0.95
-                                  );
-
-                                return (
-                                  <g
-                                    key={`forest-path-clear-${mapPath.id}`}
-                                  >
-                                    <path
-                                      d={d}
-                                      fill="none"
-                                      stroke="black"
-                                      strokeWidth={
-                                        transitionWidth
-                                      }
-                                      strokeDasharray="1.15 2.15"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-
-                                    <path
-                                      d={d}
-                                      fill="none"
-                                      stroke="black"
-                                      strokeWidth={
-                                        clearWidth
-                                      }
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-                                  </g>
-                                );
-                              }
-                            )}
-
-                            {/*
-                              Mountains get an open core plus a
-                              partial transition ring.
-
-                              Their saved stamp size determines
-                              roughly how much woodland should
-                              step away from the ridge.
-                            */}
-                            {activeMap.terrain
-                              .filter(
-                                (stamp) =>
-                                  stamp.type ===
-                                  "mountain"
-                              )
-                              .map((stamp) => {
-                                const transitionRadius =
-                                  Math.max(
-                                    1.05,
-                                    stamp.size *
-                                      0.58
-                                  );
-
-                                const clearRadius =
-                                  Math.max(
-                                    0.58,
-                                    stamp.size *
-                                      0.34
-                                  );
-
-                                return (
-                                  <g
-                                    key={`forest-mountain-clear-${stamp.id}`}
-                                  >
-                                    <circle
-                                      cx={stamp.x}
-                                      cy={stamp.y}
-                                      r={
-                                        transitionRadius
-                                      }
-                                      fill="none"
-                                      stroke="black"
-                                      strokeWidth="0.52"
-                                      strokeDasharray="0.72 1.08"
-                                    />
-
-                                    <circle
-                                      cx={stamp.x}
-                                      cy={stamp.y}
-                                      r={
-                                        clearRadius
-                                      }
-                                      fill="black"
-                                    />
-                                  </g>
-                                );
-                              })}
-
-                            {/*
-                              Settlement clearing size follows
-                              the marker's configured scale.
-                            */}
-                            {activeMap.locations.map(
-                              (location) => {
-                                const transitionRadius =
-                                  location.size ===
-                                  "large"
-                                    ? 3.2
-                                    : location.size ===
-                                        "medium"
-                                      ? 2.6
-                                      : location.size ===
-                                          "tiny"
-                                        ? 1.45
-                                        : 2.0;
-
-                                const clearRadius =
-                                  location.size ===
-                                  "large"
-                                    ? 2.0
-                                    : location.size ===
-                                        "medium"
-                                      ? 1.55
-                                      : location.size ===
-                                          "tiny"
-                                        ? 0.82
-                                        : 1.15;
-
-                                return (
-                                  <g
-                                    key={`forest-location-clear-${location.id}`}
-                                  >
-                                    <circle
-                                      cx={
-                                        location.x
-                                      }
-                                      cy={
-                                        location.y
-                                      }
-                                      r={
-                                        transitionRadius
-                                      }
-                                      fill="none"
-                                      stroke="black"
-                                      strokeWidth="0.52"
-                                      strokeDasharray="0.72 1.08"
-                                    />
-
-                                    <circle
-                                      cx={
-                                        location.x
-                                      }
-                                      cy={
-                                        location.y
-                                      }
-                                      r={
-                                        clearRadius
-                                      }
-                                      fill="black"
-                                    />
-                                  </g>
-                                );
-                              }
-                            )}
-                          </mask>
-                        )}
-
-
-                        {/*
                           Actual Land/Water coastline.
 
                           White means biome is allowed.
@@ -9774,25 +8167,29 @@ const landMaskId =
                         <pattern
                           id={patternId}
                           patternUnits="userSpaceOnUse"
-                            patternTransform={
-                              group.terrainType === "forest"
-                                ? "translate(-0.8 -0.45) rotate(-1.1 50 50)"
-                                : undefined
-                            }
                           width={
                               group.terrainType === "forest"
-                                ? storyForgeForestPatternMetrics(
-                                    mapDetailTier
-                                  ).width
-                                : 5.2
+                                ? mapDetailTier === "overview"
+                                  ? "14.5"
+                                  : mapDetailTier === "standard"
+                                    ? "11.2"
+                                    : mapDetailTier === "detailed"
+                                      ? "9.4"
+                                      : "8.2"
+                                : "5.2"
                             }
                             height={
                               group.terrainType === "forest"
-                                ? storyForgeForestPatternMetrics(
-                                    mapDetailTier
-                                  ).height
-                                : 5.2
-                            }>
+                                ? mapDetailTier === "overview"
+                                  ? "11.8"
+                                  : mapDetailTier === "standard"
+                                    ? "9.2"
+                                    : mapDetailTier === "detailed"
+                                      ? "7.8"
+                                      : "6.8"
+                                : "5.2"
+                            }
+                        >
                           {group.terrainType === "forest" ? (
                               <g>
                                 {storyForgeForestPattern(
@@ -9836,12 +8233,7 @@ const landMaskId =
                       }
                     />
 
-                    {symbol &&
-                        group.terrainType !== "forest" &&
-                        group.terrainType !== "plains" &&
-                        group.terrainType !== "desert" &&
-                        group.terrainType !== "swamp" &&
-                        group.terrainType !== "snow" && (
+                    {symbol && (
                       <rect
                         x="0"
                         y="0"
@@ -9851,91 +8243,12 @@ const landMaskId =
                           `url(#${patternId})`
                         }
                         mask={
-                            `url(#${
-                              group.terrainType === "forest"
-                                ? forestAwareSymbolMaskId
-                                : symbolMaskId
-                            })`
-                          }
+                          `url(#${symbolMaskId})`
+                        }
                       />
                     )}
                       </g>
-                                        {/*
-                        FOREST DIRECT WHOLE-TREE LAYER
-                      */}
-                      {group.terrainType === "forest" && (
-                        <g>
-                          {storyForgeForestPattern(
-                            group.style,
-                            activeMap.colors.label,
-                            activeMap.colors.forest,
-                            mapDetailTier,
-                            0,
-                            buildStoryForgeForestEntities(
-                              activeMap,
-                              group.cells,
-                              group.columns,
-                              group.rows,
-                              group.style,
-                              mapDetailTier
-                            )
-                          )}
-                        </g>
-                      )}
-
-                      {/*
-                        BIOME DIRECT WHOLE-SYMBOL LAYER
-                      */}
-                      {symbol &&
-                        (
-                          group.terrainType === "plains" ||
-                          group.terrainType === "desert" ||
-                          group.terrainType === "swamp" ||
-                          group.terrainType === "snow"
-                        ) && (
-                          <g>
-                            {buildStoryForgeBiomeSymbolEntities(
-                              activeMap,
-                              group.cells,
-                              group.columns,
-                              group.rows,
-                              group.terrainType,
-                              mapDetailTier
-                            ).map(
-                              (
-                                placement,
-                                index
-                              ) => (
-                                <text
-                                  key={
-                                    `biome-direct-${groupKey}-${index}`
-                                  }
-                                  x={placement.x}
-                                  y={placement.y}
-                                  fontSize={
-                                    2.35 *
-                                    placement.scale
-                                  }
-                                  opacity="0.68"
-                                  fill={
-                                    activeMap
-                                      .colors
-                                      .label
-                                  }
-                                  textAnchor="middle"
-                                  dominantBaseline="central"
-                                  transform={
-                                    `rotate(${placement.rotation} ${placement.x} ${placement.y})`
-                                  }
-                                >
-                                  {symbol}
-                                </text>
-                              )
-                            )}
-                          </g>
-                        )}
-
-</svg>
+                  </svg>
                 );
               }
             );

@@ -828,13 +828,6 @@ function storyForgeForestPatternMetrics(
   return { width: 12.4, height: 8.8 };
 }
 
-type StoryForgeForestEntityPlacement = {
-  x: number;
-  y: number;
-  scale: number;
-  kind: "pine" | "oak";
-};
-
 function storyForgeForestPattern(
   style: string | undefined,
   ink: string,
@@ -844,9 +837,13 @@ function storyForgeForestPattern(
     | "standard"
     | "detailed"
     | "close" = "standard",
-    scatterVariant = 0,
-    placementsOverride?: StoryForgeForestEntityPlacement[]
-  ) {
+  singlePlacement?: {
+    x: number;
+    y: number;
+    scale: number;
+    kind: "pine" | "oak";
+  }
+) {
   const selected =
     style ?? "ink-trees";
 
@@ -1243,29 +1240,34 @@ function storyForgeForestPattern(
   };
 
   /*
-   * Whole-tree map renderer.
+   * FOREST WHOLE TREE PLACEMENT V1
+   *
+   * The renderer can request one complete tree instead
+   * of a repeated pattern. The x/y passed here represent
+   * the visual CENTER of that tree.
    */
-  if (placementsOverride) {
-    return (
-      <>
-        {placementsOverride.map(
-          (placement, index) => (
-            <g key={`forest-whole-tree-${index}`}>
-              {placement.kind === "pine"
-                ? pine(
-                    placement.x,
-                    placement.y,
-                    placement.scale
-                  )
-                : oak(
-                    placement.x,
-                    placement.y,
-                    placement.scale
-                  )}
-            </g>
-          )
-        )}
-      </>
+  if (singlePlacement) {
+    const approximateTreeScale =
+      singlePlacement.scale *
+      detailScale *
+      0.82;
+
+    if (singlePlacement.kind === "pine") {
+      return pine(
+        singlePlacement.x -
+          1.66 * approximateTreeScale,
+        singlePlacement.y -
+          3.86 * approximateTreeScale,
+        singlePlacement.scale
+      );
+    }
+
+    return oak(
+      singlePlacement.x -
+        2.48 * approximateTreeScale,
+      singlePlacement.y -
+        3.58 * approximateTreeScale,
+      singlePlacement.scale
     );
   }
 
@@ -1284,13 +1286,9 @@ function storyForgeForestPattern(
   ) => {
     const raw =
       Math.sin(
-          (index + 1) * 12.9898 +
-            (
-              salt +
-              scatterVariant * 19.731
-            ) *
-              78.233
-        ) * 43758.5453;
+        (index + 1) * 12.9898 +
+          salt * 78.233
+      ) * 43758.5453;
 
     return raw - Math.floor(raw);
   };
@@ -1793,1262 +1791,6 @@ function curveGeometryForSegment(
         secondBendStrength *
         secondDirection,
   };
-}
-
-
-
-type StoryForgeBiomeSymbolPlacement = {
-  x: number;
-  y: number;
-  scale: number;
-  rotation: number;
-};
-
-
-function buildStoryForgeBiomeSymbolEntities(
-  map: StoryMap,
-  cells: Set<string>,
-  columns: number,
-  rows: number,
-  terrainType: TerrainType,
-  detailTier:
-    | "overview"
-    | "standard"
-    | "detailed"
-    | "close"
-): StoryForgeBiomeSymbolPlacement[] {
-  const biomeCells =
-    new Set<string>();
-
-  cells.forEach((key) => {
-    const {
-      column,
-      row,
-    } = parseCellKey(key);
-
-    biomeCells.add(
-      `${column}:${row}`
-    );
-  });
-
-  if (biomeCells.size === 0) {
-    return [];
-  }
-
-  const unit = (
-    index: number,
-    salt: number
-  ) => {
-    const raw =
-      Math.sin(
-        (index + 1) * 12.9898 +
-        salt * 78.233
-      ) * 43758.5453;
-
-    return raw - Math.floor(raw);
-  };
-
-
-  const hasCell = (
-    column: number,
-    row: number
-  ) =>
-    column >= 0 &&
-    row >= 0 &&
-    column < columns &&
-    row < rows &&
-    biomeCells.has(
-      `${column}:${row}`
-    );
-
-
-  const pointIsBiome = (
-    x: number,
-    y: number
-  ) => {
-    if (
-      x < 0 ||
-      y < 0 ||
-      x >= 100 ||
-      y >= 100
-    ) {
-      return false;
-    }
-
-    return hasCell(
-      Math.floor(
-        (x / 100) * columns
-      ),
-      Math.floor(
-        (y / 100) * rows
-      )
-    );
-  };
-
-
-  /*
-   * Different biomes want different visual density.
-   */
-  const standardSpacing =
-    terrainType === "plains"
-      ? 2.20
-      : terrainType === "swamp"
-        ? 2.48
-        : terrainType === "desert"
-          ? 2.72
-          : 2.65;
-
-  const zoomMultiplier =
-    detailTier === "overview"
-      ? 1.30
-      : detailTier === "standard"
-        ? 1
-        : detailTier === "detailed"
-          ? 0.89
-          : 0.80;
-
-  const spacing =
-    standardSpacing *
-    zoomMultiplier;
-
-
-  /*
-   * Roads and rivers become collision segments.
-   */
-  const pathSegments: Array<{
-    ax: number;
-    ay: number;
-    bx: number;
-    by: number;
-    clearance: number;
-  }> = [];
-
-  (map.paths ?? []).forEach(
-    (mapPath) => {
-      for (
-        let index = 1;
-        index < mapPath.points.length;
-        index += 1
-      ) {
-        const previous =
-          mapPath.points[index - 1];
-
-        const current =
-          mapPath.points[index];
-
-        const clearance =
-          mapPath.width / 2 +
-          (
-            mapPath.kind === "river"
-              ? 0.70
-              : 0.50
-          );
-
-        if (
-          !current.curveFromPrevious
-        ) {
-          pathSegments.push({
-            ax: previous.x,
-            ay: previous.y,
-            bx: current.x,
-            by: current.y,
-            clearance,
-          });
-
-          continue;
-        }
-
-        const curve =
-          curveGeometryForSegment(
-            mapPath.kind,
-            previous,
-            current,
-            index
-          );
-
-        let lastX =
-          previous.x;
-
-        let lastY =
-          previous.y;
-
-        for (
-          let sample = 1;
-          sample <= 10;
-          sample += 1
-        ) {
-          const t =
-            sample / 10;
-
-          const inverse =
-            1 - t;
-
-          const x =
-            inverse * inverse * inverse *
-              previous.x +
-            3 * inverse * inverse * t *
-              curve.control1X +
-            3 * inverse * t * t *
-              curve.control2X +
-            t * t * t *
-              current.x;
-
-          const y =
-            inverse * inverse * inverse *
-              previous.y +
-            3 * inverse * inverse * t *
-              curve.control1Y +
-            3 * inverse * t * t *
-              curve.control2Y +
-            t * t * t *
-              current.y;
-
-          pathSegments.push({
-            ax: lastX,
-            ay: lastY,
-            bx: x,
-            by: y,
-            clearance,
-          });
-
-          lastX = x;
-          lastY = y;
-        }
-      }
-    }
-  );
-
-
-  const pointSegmentDistance = (
-    px: number,
-    py: number,
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number
-  ) => {
-    const dx = bx - ax;
-    const dy = by - ay;
-
-    const lengthSquared =
-      dx * dx + dy * dy;
-
-    if (
-      lengthSquared <
-      0.000001
-    ) {
-      return Math.hypot(
-        px - ax,
-        py - ay
-      );
-    }
-
-    const t =
-      Math.max(
-        0,
-        Math.min(
-          1,
-          (
-            (px - ax) * dx +
-            (py - ay) * dy
-          ) /
-            lengthSquared
-        )
-      );
-
-    return Math.hypot(
-      px - (ax + dx * t),
-      py - (ay + dy * t)
-    );
-  };
-
-
-  const placements:
-    StoryForgeBiomeSymbolPlacement[] =
-      [];
-
-  const gridColumns =
-    Math.ceil(
-      100 / spacing
-    );
-
-  const gridRows =
-    Math.ceil(
-      100 / spacing
-    );
-
-
-  for (
-    let gridY = 0;
-    gridY < gridRows;
-    gridY += 1
-  ) {
-    for (
-      let gridX = 0;
-      gridX < gridColumns;
-      gridX += 1
-    ) {
-      const index =
-        gridY *
-          gridColumns +
-        gridX;
-
-      const baseX =
-        (gridX + 0.5) *
-          spacing +
-        (
-          unit(index, 4.71) -
-          0.5
-        ) *
-          spacing *
-          0.70;
-
-      const baseY =
-        (gridY + 0.5) *
-          spacing +
-        (
-          unit(index, 11.83) -
-          0.5
-        ) *
-          spacing *
-          0.70;
-
-      if (
-        !pointIsBiome(
-          baseX,
-          baseY
-        )
-      ) {
-        continue;
-      }
-
-
-      const column =
-        Math.floor(
-          (baseX / 100) *
-            columns
-        );
-
-      const row =
-        Math.floor(
-          (baseY / 100) *
-            rows
-        );
-
-
-      let neighbors = 0;
-
-      for (
-        let dy = -1;
-        dy <= 1;
-        dy += 1
-      ) {
-        for (
-          let dx = -1;
-          dx <= 1;
-          dx += 1
-        ) {
-          if (
-            dx === 0 &&
-            dy === 0
-          ) {
-            continue;
-          }
-
-          if (
-            hasCell(
-              column + dx,
-              row + dy
-            )
-          ) {
-            neighbors += 1;
-          }
-        }
-      }
-
-
-      const baseDensity =
-        neighbors >= 8
-          ? 0.93
-          : neighbors >= 6
-            ? 0.78
-            : neighbors >= 4
-              ? 0.57
-              : neighbors >= 2
-                ? 0.36
-                : 0.18;
-
-
-      const biomeDensity =
-        terrainType === "plains"
-          ? 1.05
-          : terrainType === "swamp"
-            ? 0.96
-            : terrainType === "desert"
-              ? 0.88
-              : 0.84;
-
-
-      if (
-        unit(index, 17.29) >
-        Math.min(
-          0.98,
-          baseDensity *
-            biomeDensity
-        )
-      ) {
-        continue;
-      }
-
-
-      const sizeSeed =
-        unit(index, 23.41);
-
-      let scale =
-        0.82 +
-        sizeSeed * 0.25;
-
-      if (
-        neighbors <= 3
-      ) {
-        scale *= 0.86;
-      }
-
-
-      const radius =
-        spacing *
-        0.17 *
-        scale;
-
-
-      const shift =
-        spacing * 0.38;
-
-      const angle =
-        unit(index, 29.73) *
-        Math.PI *
-        2;
-
-
-      const offsets = [
-        [0, 0],
-
-        [
-          Math.cos(angle) *
-            shift * 0.5,
-          Math.sin(angle) *
-            shift * 0.5,
-        ],
-
-        [
-          Math.cos(angle + 2.1) *
-            shift * 0.5,
-          Math.sin(angle + 2.1) *
-            shift * 0.5,
-        ],
-
-        [
-          Math.cos(angle - 2.1) *
-            shift * 0.5,
-          Math.sin(angle - 2.1) *
-            shift * 0.5,
-        ],
-
-        [
-          Math.cos(angle) *
-            shift,
-          Math.sin(angle) *
-            shift,
-        ],
-
-        [
-          Math.cos(angle + 2.1) *
-            shift,
-          Math.sin(angle + 2.1) *
-            shift,
-        ],
-
-        [
-          Math.cos(angle - 2.1) *
-            shift,
-          Math.sin(angle - 2.1) *
-            shift,
-        ],
-      ];
-
-
-      let accepted:
-        {
-          x: number;
-          y: number;
-        } |
-        null = null;
-
-
-      for (
-        const [offsetX, offsetY]
-        of offsets
-      ) {
-        const x =
-          baseX + offsetX;
-
-        const y =
-          baseY + offsetY;
-
-
-        const probes = [
-          [x, y],
-          [x - radius, y],
-          [x + radius, y],
-          [x, y - radius],
-          [x, y + radius],
-        ];
-
-
-        if (
-          probes.some(
-            ([px, py]) =>
-              !pointIsBiome(
-                px,
-                py
-              ) ||
-              !pointIsLand(
-                map,
-                px,
-                py
-              )
-          )
-        ) {
-          continue;
-        }
-
-
-        let blocked = false;
-
-
-        /*
-         * Roads and rivers.
-         */
-        for (
-          const segment
-          of pathSegments
-        ) {
-          if (
-            pointSegmentDistance(
-              x,
-              y,
-              segment.ax,
-              segment.ay,
-              segment.bx,
-              segment.by
-            ) <
-            segment.clearance +
-              radius +
-              0.18
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-
-        /*
-         * Mountains use the same tightened 10% rule
-         * already approved for Forest.
-         */
-        for (
-          const stamp
-          of map.terrain
-        ) {
-          if (
-            stamp.type !==
-            "mountain"
-          ) {
-            continue;
-          }
-
-          const clearance =
-            (
-              Math.max(
-                0.95,
-                stamp.size * 0.39
-              ) +
-              0.45 +
-              radius * 0.70
-            ) *
-            0.90;
-
-          if (
-            Math.hypot(
-              x - stamp.x,
-              y - stamp.y
-            ) <
-            clearance
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-
-        /*
-         * Locations.
-         */
-        for (
-          const location
-          of (map.locations ?? [])
-        ) {
-          const clearance =
-            location.size === "large"
-              ? 2.2
-              : location.size === "medium"
-                ? 1.7
-                : location.size === "tiny"
-                  ? 0.9
-                  : 1.25;
-
-          if (
-            Math.hypot(
-              x - location.x,
-              y - location.y
-            ) <
-            clearance +
-              radius +
-              0.18
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-
-        /*
-         * Keep direct symbols from sitting on top of
-         * already accepted symbols.
-         */
-        if (
-          placements.some(
-            (existing) =>
-              Math.hypot(
-                existing.x - x,
-                existing.y - y
-              ) <
-              spacing * 0.44
-          )
-        ) {
-          continue;
-        }
-
-
-        accepted = {
-          x,
-          y,
-        };
-
-        break;
-      }
-
-
-      if (!accepted) {
-        continue;
-      }
-
-
-      placements.push({
-        x: accepted.x,
-        y: accepted.y,
-        scale,
-        rotation:
-          (
-            unit(index, 41.63) -
-            0.5
-          ) *
-          8,
-      });
-
-
-      if (
-        placements.length >=
-        1800
-      ) {
-        return placements;
-      }
-    }
-  }
-
-
-  return placements;
-}
-
-
-function buildStoryForgeForestEntities(
-  map: StoryMap,
-  cells: Set<string>,
-  columns: number,
-  rows: number,
-  style: string | undefined,
-  detailTier:
-    | "overview"
-    | "standard"
-    | "detailed"
-    | "close"
-): StoryForgeForestEntityPlacement[] {
-  const forest = new Set<string>();
-
-  cells.forEach((key) => {
-    const { column, row } =
-      parseCellKey(key);
-
-    forest.add(`${column}:${row}`);
-  });
-
-  const unit = (
-    index: number,
-    salt: number
-  ) => {
-    const raw =
-      Math.sin(
-        (index + 1) * 12.9898 +
-          salt * 78.233
-      ) * 43758.5453;
-
-    return raw - Math.floor(raw);
-  };
-
-  const hasCell = (
-    column: number,
-    row: number
-  ) =>
-    column >= 0 &&
-    row >= 0 &&
-    column < columns &&
-    row < rows &&
-    forest.has(`${column}:${row}`);
-
-  const inForest = (
-    x: number,
-    y: number
-  ) => {
-    if (
-      x < 0 ||
-      y < 0 ||
-      x >= 100 ||
-      y >= 100
-    ) {
-      return false;
-    }
-
-    return hasCell(
-      Math.floor((x / 100) * columns),
-      Math.floor((y / 100) * rows)
-    );
-  };
-
-  const pointSegmentDistance = (
-    px: number,
-    py: number,
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number
-  ) => {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const lengthSquared =
-      dx * dx + dy * dy;
-
-    if (lengthSquared < 0.000001) {
-      return Math.hypot(
-        px - ax,
-        py - ay
-      );
-    }
-
-    const t = Math.max(
-      0,
-      Math.min(
-        1,
-        (
-          (px - ax) * dx +
-          (py - ay) * dy
-        ) / lengthSquared
-      )
-    );
-
-    return Math.hypot(
-      px - (ax + dx * t),
-      py - (ay + dy * t)
-    );
-  };
-
-  /*
-   * Convert roads/rivers, including curved segments,
-   * into short collision segments.
-   */
-  const pathSegments: Array<{
-    ax: number;
-    ay: number;
-    bx: number;
-    by: number;
-    clearance: number;
-  }> = [];
-
-  (map.paths ?? []).forEach((mapPath) => {
-    for (
-      let i = 1;
-      i < mapPath.points.length;
-      i += 1
-    ) {
-      const a = mapPath.points[i - 1];
-      const b = mapPath.points[i];
-
-      const clearance =
-        mapPath.width / 2 +
-        (mapPath.kind === "river"
-          ? 0.82
-          : 0.58);
-
-      if (!b.curveFromPrevious) {
-        pathSegments.push({
-          ax: a.x,
-          ay: a.y,
-          bx: b.x,
-          by: b.y,
-          clearance,
-        });
-        continue;
-      }
-
-      const curve =
-        curveGeometryForSegment(
-          mapPath.kind,
-          a,
-          b,
-          i
-        );
-
-      let lastX = a.x;
-      let lastY = a.y;
-
-      for (
-        let sample = 1;
-        sample <= 10;
-        sample += 1
-      ) {
-        const t = sample / 10;
-        const u = 1 - t;
-
-        const x =
-          u * u * u * a.x +
-          3 * u * u * t *
-            curve.control1X +
-          3 * u * t * t *
-            curve.control2X +
-          t * t * t * b.x;
-
-        const y =
-          u * u * u * a.y +
-          3 * u * u * t *
-            curve.control1Y +
-          3 * u * t * t *
-            curve.control2Y +
-          t * t * t * b.y;
-
-        pathSegments.push({
-          ax: lastX,
-          ay: lastY,
-          bx: x,
-          by: y,
-          clearance,
-        });
-
-        lastX = x;
-        lastY = y;
-      }
-    }
-  });
-
-  /*
-   * 100% zoom is deliberately denser than the old stamp.
-   */
-  const spacing =
-    detailTier === "overview"
-      ? 3.45
-      : detailTier === "standard"
-        ? 2.28
-        : detailTier === "detailed"
-          ? 2.03
-          : 1.82;
-
-  const gridColumns =
-    Math.ceil(100 / spacing);
-
-  const gridRows =
-    Math.ceil(100 / spacing);
-
-  const placements:
-    StoryForgeForestEntityPlacement[] =
-      [];
-
-  for (
-    let gy = 0;
-    gy < gridRows;
-    gy += 1
-  ) {
-    for (
-      let gx = 0;
-      gx < gridColumns;
-      gx += 1
-    ) {
-      const index =
-        gy * gridColumns + gx;
-
-      const baseX =
-        (gx + 0.5) * spacing +
-        (unit(index, 3.17) - 0.5) *
-          spacing * 0.68;
-
-      const baseY =
-        (gy + 0.5) * spacing +
-        (unit(index, 9.41) - 0.5) *
-          spacing * 0.68;
-
-      if (!inForest(baseX, baseY)) {
-        continue;
-      }
-
-      const column =
-        Math.floor(
-          (baseX / 100) * columns
-        );
-
-      const row =
-        Math.floor(
-          (baseY / 100) * rows
-        );
-
-      let neighbors = 0;
-
-      for (
-        let dy = -1;
-        dy <= 1;
-        dy += 1
-      ) {
-        for (
-          let dx = -1;
-          dx <= 1;
-          dx += 1
-        ) {
-          if (dx === 0 && dy === 0) {
-            continue;
-          }
-
-          if (
-            hasCell(
-              column + dx,
-              row + dy
-            )
-          ) {
-            neighbors += 1;
-          }
-        }
-      }
-
-      const density =
-        neighbors >= 8
-          ? 0.97
-          : neighbors >= 6
-            ? 0.84
-            : neighbors >= 4
-              ? 0.64
-              : neighbors >= 2
-                ? 0.42
-                : 0.21;
-
-      if (
-        unit(index, 14.77) >
-        density
-      ) {
-        continue;
-      }
-
-      const sizeSeed =
-        unit(index, 21.37);
-
-      let scale =
-        0.67 +
-        sizeSeed * 0.27;
-
-      if (
-        neighbors >= 7 &&
-        sizeSeed > 0.91
-      ) {
-        scale += 0.14;
-      }
-
-      if (neighbors <= 3) {
-        scale *= 0.80;
-      } else if (neighbors <= 5) {
-        scale *= 0.90;
-      }
-
-      const side =
-        0.43 + scale * 0.27;
-
-      const down =
-        1.10 + scale * 0.68;
-
-      /*
-       * If blocked, try shifting the entire tree to one
-       * of three nearby locations.
-       */
-      const shift =
-        spacing * 0.40;
-
-      const angle =
-        unit(index, 26.43) *
-        Math.PI * 2;
-
-      const offsets = [
-        [0, 0],
-
-        /*
-         * Small local adjustments first.
-         */
-        [
-          Math.cos(angle) *
-            shift * 0.52,
-          Math.sin(angle) *
-            shift * 0.52,
-        ],
-        [
-          Math.cos(angle + 2.1) *
-            shift * 0.52,
-          Math.sin(angle + 2.1) *
-            shift * 0.52,
-        ],
-        [
-          Math.cos(angle - 2.1) *
-            shift * 0.52,
-          Math.sin(angle - 2.1) *
-            shift * 0.52,
-        ],
-
-        /*
-         * Then try the wider moves when a mountain,
-         * road, river, or settlement needs more room.
-         */
-        [
-          Math.cos(angle) * shift,
-          Math.sin(angle) * shift,
-        ],
-        [
-          Math.cos(angle + 2.1) *
-            shift,
-          Math.sin(angle + 2.1) *
-            shift,
-        ],
-        [
-          Math.cos(angle - 2.1) *
-            shift,
-          Math.sin(angle - 2.1) *
-            shift,
-        ],
-      ];
-
-      let accepted:
-        { x: number; y: number } |
-        null = null;
-
-      for (
-        const [offsetX, offsetY]
-        of offsets
-      ) {
-        const x =
-          baseX + offsetX;
-
-        const y =
-          baseY + offsetY;
-
-        const probes = [
-          [x, y],
-          [x - side, y + 0.45],
-          [x + side, y + 0.45],
-          [x, y + down],
-        ];
-
-        /*
-         * Whole tree must fit forest + land.
-         */
-        if (
-          probes.some(
-            ([px, py]) =>
-              !inForest(px, py) ||
-              !pointIsLand(
-                map,
-                px,
-                py
-              )
-          )
-        ) {
-          continue;
-        }
-
-        const centerX = x;
-        const centerY =
-          y + down * 0.48;
-
-        let blocked = false;
-
-        for (
-          const segment of pathSegments
-        ) {
-          if (
-            pointSegmentDistance(
-              centerX,
-              centerY,
-              segment.ax,
-              segment.ay,
-              segment.bx,
-              segment.by
-            ) <
-            segment.clearance +
-              0.48 +
-              scale * 0.24
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-        for (
-          const stamp of map.terrain
-        ) {
-          if (
-            stamp.type !== "mountain"
-          ) {
-            continue;
-          }
-
-          /*
-           * Mountains still keep a readable clearing,
-           * but trees may grow about 10% closer than
-           * before. Coastline behavior is unchanged.
-           */
-          const clearance =
-            (
-              Math.max(
-                0.95,
-                stamp.size * 0.39
-              ) +
-              0.45 +
-              scale * 0.22
-            ) *
-            0.90;
-
-          if (
-            Math.hypot(
-              centerX - stamp.x,
-              centerY - stamp.y
-            ) < clearance
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (blocked) {
-          continue;
-        }
-
-        for (
-          const location
-          of (map.locations ?? [])
-        ) {
-          const clearance =
-            location.size === "large"
-              ? 2.2
-              : location.size === "medium"
-                ? 1.7
-                : location.size === "tiny"
-                  ? 0.9
-                  : 1.25;
-
-          if (
-            Math.hypot(
-              centerX - location.x,
-              centerY - location.y
-            ) <
-            clearance +
-              0.45 +
-              scale * 0.22
-          ) {
-            blocked = true;
-            break;
-          }
-        }
-
-        if (!blocked) {
-          accepted = { x, y };
-          break;
-        }
-      }
-
-      if (!accepted) {
-        continue;
-      }
-
-      let kind:
-        "pine" | "oak";
-
-      if (style === "pine") {
-        kind = "pine";
-      } else if (style === "oak") {
-        kind = "oak";
-      } else if (style === "mixed") {
-        kind =
-          unit(index, 31.91) > 0.5
-            ? "pine"
-            : "oak";
-      } else {
-        kind =
-          unit(index, 37.13) > 0.43
-            ? "pine"
-            : "oak";
-      }
-
-      placements.push({
-        x: accepted.x,
-        y: accepted.y,
-        scale,
-        kind,
-      });
-
-      if (
-        placements.length >= 1800
-      ) {
-        return placements;
-      }
-    }
-  }
-
-  return placements;
 }
 
 
@@ -9836,12 +8578,7 @@ const landMaskId =
                       }
                     />
 
-                    {symbol &&
-                        group.terrainType !== "forest" &&
-                        group.terrainType !== "plains" &&
-                        group.terrainType !== "desert" &&
-                        group.terrainType !== "swamp" &&
-                        group.terrainType !== "snow" && (
+                    {symbol && group.terrainType !== "forest" && (
                       <rect
                         x="0"
                         y="0"
@@ -9860,82 +8597,956 @@ const landMaskId =
                       />
                     )}
                       </g>
-                                        {/*
-                        FOREST DIRECT WHOLE-TREE LAYER
-                      */}
-                      {group.terrainType === "forest" && (
-                        <g>
-                          {storyForgeForestPattern(
-                            group.style,
-                            activeMap.colors.label,
-                            activeMap.colors.forest,
-                            mapDetailTier,
-                            0,
-                            buildStoryForgeForestEntities(
-                              activeMap,
-                              group.cells,
-                              group.columns,
-                              group.rows,
-                              group.style,
-                              mapDetailTier
-                            )
-                          )}
-                        </g>
-                      )}
 
                       {/*
-                        BIOME DIRECT WHOLE-SYMBOL LAYER
-                      */}
-                      {symbol &&
-                        (
-                          group.terrainType === "plains" ||
-                          group.terrainType === "desert" ||
-                          group.terrainType === "swamp" ||
-                          group.terrainType === "snow"
-                        ) && (
-                          <g>
-                            {buildStoryForgeBiomeSymbolEntities(
-                              activeMap,
-                              group.cells,
-                              group.columns,
-                              group.rows,
-                              group.terrainType,
-                              mapDetailTier
-                            ).map(
-                              (
-                                placement,
-                                index
-                              ) => (
-                                <text
-                                  key={
-                                    `biome-direct-${groupKey}-${index}`
-                                  }
-                                  x={placement.x}
-                                  y={placement.y}
-                                  fontSize={
-                                    2.35 *
-                                    placement.scale
-                                  }
-                                  opacity="0.68"
-                                  fill={
-                                    activeMap
-                                      .colors
-                                      .label
-                                  }
-                                  textAnchor="middle"
-                                  dominantBaseline="central"
-                                  transform={
-                                    `rotate(${placement.rotation} ${placement.x} ${placement.y})`
-                                  }
-                                >
-                                  {symbol}
-                                </text>
-                              )
-                            )}
-                          </g>
-                        )}
+                        FOREST WHOLE TREE PLACEMENT V1
 
-</svg>
+                        Unlike the old tiled forest, every
+                        candidate is checked BEFORE drawing.
+
+                        A tree is either rendered whole or it
+                        is not rendered at all.
+                      */}
+                      {group.terrainType === "forest" &&
+                        (() => {
+                          const forestCells =
+                            [...group.cells]
+                              .map((key) => {
+                                const parsed =
+                                  parseCellKey(
+                                    key
+                                  );
+
+                                return {
+                                  ...parsed,
+                                  key,
+                                };
+                              })
+                              .sort(
+                                (a, b) =>
+                                  a.row -
+                                    b.row ||
+                                  a.column -
+                                    b.column
+                              );
+
+                          if (
+                            forestCells.length ===
+                            0
+                          ) {
+                            return null;
+                          }
+
+                          /*
+                           * Stable group seed.
+                           *
+                           * Changing tools or rerendering
+                           * will not make trees jump.
+                           */
+                          const groupSeed =
+                            Array.from(
+                              groupKey
+                            ).reduce(
+                              (
+                                sum,
+                                character,
+                                index
+                              ) =>
+                                sum +
+                                character.charCodeAt(
+                                  0
+                                ) *
+                                  (index + 1),
+                              0
+                            );
+
+                          const stableForestValue =
+                            (
+                              index: number,
+                              salt: number
+                            ) => {
+                              const raw =
+                                Math.sin(
+                                  (index +
+                                    1) *
+                                    12.9898 +
+                                    (
+                                      salt +
+                                      groupSeed *
+                                        0.001
+                                    ) *
+                                      78.233
+                                ) *
+                                43758.5453;
+
+                              return (
+                                raw -
+                                Math.floor(
+                                  raw
+                                )
+                              );
+                            };
+
+                          /*
+                           * Same size relationship as
+                           * storyForgeForestPattern().
+                           */
+                          const forestDetailScale =
+                            (
+                              mapDetailTier ===
+                              "overview"
+                                ? 1.06
+                                : mapDetailTier ===
+                                    "standard"
+                                  ? 1
+                                  : mapDetailTier ===
+                                      "detailed"
+                                    ? 0.82
+                                    : 0.70
+                            ) * 0.545;
+
+                          const densityPerCell =
+                            mapDetailTier ===
+                            "overview"
+                              ? 0.16
+                              : mapDetailTier ===
+                                  "standard"
+                                ? 0.29
+                                : mapDetailTier ===
+                                    "detailed"
+                                  ? 0.40
+                                  : 0.50;
+
+                          /*
+                           * Larger painted forests therefore
+                           * naturally receive more trees.
+                           *
+                           * Small pockets only receive trees
+                           * when a complete tree can actually
+                           * fit inside them.
+                           */
+                          const desiredTreeCount =
+                            Math.max(
+                              1,
+                              Math.min(
+                                320,
+                                Math.round(
+                                  forestCells
+                                    .length *
+                                    densityPerCell
+                                )
+                              )
+                            );
+
+                          const maxAttempts =
+                            Math.min(
+                              14000,
+                              Math.max(
+                                220,
+                                desiredTreeCount *
+                                  85
+                              )
+                            );
+
+                          type WholeForestTree = {
+                            x: number;
+                            y: number;
+                            scale: number;
+                            kind:
+                              | "pine"
+                              | "oak";
+                            halfWidth: number;
+                            halfHeight: number;
+                          };
+
+                          const trees:
+                            WholeForestTree[] =
+                            [];
+
+                          const selectedForestStyle =
+                            group.style ??
+                            "ink-trees";
+
+                          const pointIsInsideForest =
+                            (
+                              x: number,
+                              y: number
+                            ) => {
+                              if (
+                                x < 0 ||
+                                x >= 100 ||
+                                y < 0 ||
+                                y >= 100
+                              ) {
+                                return false;
+                              }
+
+                              const column =
+                                Math.floor(
+                                  (x /
+                                    100) *
+                                    group.columns
+                                );
+
+                              const row =
+                                Math.floor(
+                                  (y /
+                                    100) *
+                                    group.rows
+                                );
+
+                              if (
+                                !group.cells.has(
+                                  cellKey(
+                                    column,
+                                    row
+                                  )
+                                )
+                              ) {
+                                return false;
+                              }
+
+                              return pointIsLand(
+                                activeMap,
+                                x,
+                                y
+                              );
+                            };
+
+                          /*
+                           * Distance measured in roughly
+                           * screen-proportional map units.
+                           */
+                          const visualDistance =
+                            (
+                              ax: number,
+                              ay: number,
+                              bx: number,
+                              by: number
+                            ) => {
+                              const dx =
+                                ax - bx;
+
+                              const dy =
+                                (ay - by) /
+                                Math.max(
+                                  0.01,
+                                  renderCanvasAspect
+                                );
+
+                              return Math.sqrt(
+                                dx * dx +
+                                  dy * dy
+                              );
+                            };
+
+                          const pointSegmentDistance =
+                            (
+                              px: number,
+                              py: number,
+                              ax: number,
+                              ay: number,
+                              bx: number,
+                              by: number
+                            ) => {
+                              const aspect =
+                                Math.max(
+                                  0.01,
+                                  renderCanvasAspect
+                                );
+
+                              const pY =
+                                py / aspect;
+                              const aY =
+                                ay / aspect;
+                              const bY =
+                                by / aspect;
+
+                              const abX =
+                                bx - ax;
+                              const abY =
+                                bY - aY;
+
+                              const lengthSquared =
+                                abX * abX +
+                                abY * abY;
+
+                              if (
+                                lengthSquared <=
+                                0.000001
+                              ) {
+                                return Math.sqrt(
+                                  (px - ax) *
+                                    (px - ax) +
+                                    (pY - aY) *
+                                      (pY - aY)
+                                );
+                              }
+
+                              const t =
+                                Math.max(
+                                  0,
+                                  Math.min(
+                                    1,
+                                    (
+                                      (px -
+                                        ax) *
+                                        abX +
+                                      (pY -
+                                        aY) *
+                                        abY
+                                    ) /
+                                      lengthSquared
+                                  )
+                                );
+
+                              const nearestX =
+                                ax +
+                                abX * t;
+
+                              const nearestY =
+                                aY +
+                                abY * t;
+
+                              return Math.sqrt(
+                                (px -
+                                  nearestX) *
+                                  (px -
+                                    nearestX) +
+                                  (pY -
+                                    nearestY) *
+                                    (pY -
+                                      nearestY)
+                              );
+                            };
+
+                          const mountainStamps =
+                            activeMap.terrain.filter(
+                              (stamp) =>
+                                stamp.type ===
+                                "mountain"
+                            );
+
+                          let attempt = 0;
+
+                          while (
+                            trees.length <
+                              desiredTreeCount &&
+                            attempt <
+                              maxAttempts
+                          ) {
+                            /*
+                             * Choose an ACTUAL forest cell
+                             * first.
+                             *
+                             * This is the major difference
+                             * from the old bounding-box
+                             * scatter approach.
+                             */
+                            const cell =
+                              forestCells[
+                                Math.floor(
+                                  stableForestValue(
+                                    attempt,
+                                    2.173
+                                  ) *
+                                    forestCells
+                                      .length
+                                )
+                              ];
+
+                            const cellJitterX =
+                              0.12 +
+                              stableForestValue(
+                                attempt,
+                                5.271
+                              ) *
+                                0.76;
+
+                            const cellJitterY =
+                              0.12 +
+                              stableForestValue(
+                                attempt,
+                                7.913
+                              ) *
+                                0.76;
+
+                            const x =
+                              (
+                                cell.column +
+                                cellJitterX
+                              ) /
+                              group.columns *
+                              100;
+
+                            const y =
+                              (
+                                cell.row +
+                                cellJitterY
+                              ) /
+                              group.rows *
+                              100;
+
+                            const kindSeed =
+                              stableForestValue(
+                                attempt,
+                                11.317
+                              );
+
+                            let kind:
+                              | "pine"
+                              | "oak";
+
+                            if (
+                              selectedForestStyle ===
+                              "pine"
+                            ) {
+                              kind =
+                                "pine";
+                            } else if (
+                              selectedForestStyle ===
+                              "oak"
+                            ) {
+                              kind =
+                                "oak";
+                            } else if (
+                              selectedForestStyle ===
+                              "mixed"
+                            ) {
+                              kind =
+                                kindSeed >
+                                0.5
+                                  ? "pine"
+                                  : "oak";
+                            } else {
+                              kind =
+                                kindSeed >
+                                0.43
+                                  ? "pine"
+                                  : "oak";
+                            }
+
+                            /*
+                             * Mostly small trees.
+                             * Occasional medium/larger
+                             * trees only where they fit.
+                             */
+                            const sizeSeed =
+                              stableForestValue(
+                                attempt,
+                                14.713
+                              );
+
+                            const treeScale =
+                              0.63 +
+                              sizeSeed *
+                                0.25 +
+                              (
+                                sizeSeed >
+                                0.94
+                                  ? 0.10
+                                  : 0
+                              );
+
+                            const effectiveScale =
+                              treeScale *
+                              forestDetailScale *
+                              0.82;
+
+                            const halfWidth =
+                              (
+                                kind ===
+                                "oak"
+                                  ? 2.58
+                                  : 1.74
+                              ) *
+                                effectiveScale +
+                              0.10;
+
+                            const halfHeight =
+                              (
+                                kind ===
+                                "oak"
+                                  ? 3.62
+                                  : 3.91
+                              ) *
+                                effectiveScale +
+                              0.10;
+
+                            /*
+                             * Test the complete approximate
+                             * footprint of the artwork.
+                             *
+                             * If ANY important edge point
+                             * falls outside forest/land,
+                             * don't draw the tree.
+                             */
+                            const footprintSamples =
+                              [
+                                [0, 0],
+                                [
+                                  -halfWidth,
+                                  0,
+                                ],
+                                [
+                                  halfWidth,
+                                  0,
+                                ],
+                                [
+                                  0,
+                                  -halfHeight,
+                                ],
+                                [
+                                  0,
+                                  halfHeight,
+                                ],
+                                [
+                                  -halfWidth *
+                                    0.78,
+                                  -halfHeight *
+                                    0.78,
+                                ],
+                                [
+                                  halfWidth *
+                                    0.78,
+                                  -halfHeight *
+                                    0.78,
+                                ],
+                                [
+                                  -halfWidth *
+                                    0.78,
+                                  halfHeight *
+                                    0.78,
+                                ],
+                                [
+                                  halfWidth *
+                                    0.78,
+                                  halfHeight *
+                                    0.78,
+                                ],
+                              ] as const;
+
+                            const fitsForest =
+                              footprintSamples.every(
+                                (
+                                  [
+                                    dx,
+                                    dy,
+                                  ]
+                                ) =>
+                                  pointIsInsideForest(
+                                    x + dx,
+                                    y + dy
+                                  )
+                              );
+
+                            if (
+                              !fitsForest
+                            ) {
+                              attempt += 1;
+                              continue;
+                            }
+
+                            /*
+                             * Prevent actual artwork
+                             * overlap rather than relying
+                             * on a repeating-grid distance.
+                             */
+                            const overlapsTree =
+                              trees.some(
+                                (
+                                  existing
+                                ) => {
+                                  const dx =
+                                    Math.abs(
+                                      existing.x -
+                                        x
+                                    );
+
+                                  const dy =
+                                    Math.abs(
+                                      existing.y -
+                                        y
+                                    );
+
+                                  return (
+                                    dx <
+                                      (
+                                        existing.halfWidth +
+                                        halfWidth
+                                      ) *
+                                        0.86 &&
+                                    dy <
+                                      (
+                                        existing.halfHeight +
+                                        halfHeight
+                                      ) *
+                                        0.70
+                                  );
+                                }
+                              );
+
+                            if (
+                              overlapsTree
+                            ) {
+                              attempt += 1;
+                              continue;
+                            }
+
+                            /*
+                             * Approximate radius used for
+                             * environment clearance.
+                             */
+                            const treeRadius =
+                              Math.max(
+                                halfWidth,
+                                halfHeight *
+                                  0.46
+                              );
+
+                            let hardBlocked =
+                              false;
+
+                            let transitionPressure =
+                              0;
+
+                            /*
+                             * Roads / rivers.
+                             *
+                             * Immediate corridor:
+                             * no tree.
+                             *
+                             * Nearby corridor:
+                             * progressively fewer whole
+                             * trees, never faded trees.
+                             */
+                            for (
+                              const mapPath of
+                              activeMap.paths ??
+                              []
+                            ) {
+                              if (
+                                mapPath.points
+                                  .length <
+                                2
+                              ) {
+                                continue;
+                              }
+
+                              let nearest =
+                                Infinity;
+
+                              for (
+                                let pointIndex =
+                                    1;
+                                pointIndex <
+                                mapPath.points
+                                  .length;
+                                pointIndex +=
+                                  1
+                              ) {
+                                const a =
+                                  mapPath
+                                    .points[
+                                    pointIndex -
+                                      1
+                                  ];
+
+                                const b =
+                                  mapPath
+                                    .points[
+                                    pointIndex
+                                  ];
+
+                                nearest =
+                                  Math.min(
+                                    nearest,
+                                    pointSegmentDistance(
+                                      x,
+                                      y,
+                                      a.x,
+                                      a.y,
+                                      b.x,
+                                      b.y
+                                    )
+                                  );
+                              }
+
+                              const hardDistance =
+                                treeRadius +
+                                mapPath.width /
+                                  2 +
+                                (
+                                  mapPath.kind ===
+                                  "river"
+                                    ? 0.92
+                                    : 0.62
+                                );
+
+                              const softDistance =
+                                hardDistance +
+                                (
+                                  mapPath.kind ===
+                                  "river"
+                                    ? 1.70
+                                    : 1.25
+                                );
+
+                              if (
+                                nearest <
+                                hardDistance
+                              ) {
+                                hardBlocked =
+                                  true;
+                                break;
+                              }
+
+                              if (
+                                nearest <
+                                softDistance
+                              ) {
+                                transitionPressure =
+                                  Math.max(
+                                    transitionPressure,
+                                    1 -
+                                      (
+                                        nearest -
+                                        hardDistance
+                                      ) /
+                                        (
+                                          softDistance -
+                                          hardDistance
+                                        )
+                                  );
+                              }
+                            }
+
+                            if (
+                              hardBlocked
+                            ) {
+                              attempt += 1;
+                              continue;
+                            }
+
+                            /*
+                             * Mountains only influence
+                             * their LOCAL neighborhood.
+                             */
+                            for (
+                              const stamp of
+                              mountainStamps
+                            ) {
+                              const mountainScale =
+                                typeof stamp.mountainScale ===
+                                "number"
+                                  ? stamp.mountainScale
+                                  : 1;
+
+                              const mountainRadius =
+                                Math.max(
+                                  0.72,
+                                  stamp.size *
+                                    0.32 *
+                                    mountainScale
+                                );
+
+                              const distance =
+                                visualDistance(
+                                  x,
+                                  y,
+                                  stamp.x,
+                                  stamp.y
+                                );
+
+                              const hardDistance =
+                                mountainRadius +
+                                treeRadius *
+                                  0.76;
+
+                              const softDistance =
+                                hardDistance +
+                                1.45;
+
+                              if (
+                                distance <
+                                hardDistance
+                              ) {
+                                hardBlocked =
+                                  true;
+                                break;
+                              }
+
+                              if (
+                                distance <
+                                softDistance
+                              ) {
+                                transitionPressure =
+                                  Math.max(
+                                    transitionPressure,
+                                    1 -
+                                      (
+                                        distance -
+                                        hardDistance
+                                      ) /
+                                        (
+                                          softDistance -
+                                          hardDistance
+                                        )
+                                  );
+                              }
+                            }
+
+                            if (
+                              hardBlocked
+                            ) {
+                              attempt += 1;
+                              continue;
+                            }
+
+                            /*
+                             * Settlements / locations.
+                             */
+                            for (
+                              const location of
+                              activeMap.locations
+                            ) {
+                              const locationRadius =
+                                location.size ===
+                                "large"
+                                  ? 1.85
+                                  : location.size ===
+                                      "medium"
+                                    ? 1.38
+                                    : location.size ===
+                                        "tiny"
+                                      ? 0.62
+                                      : 0.98;
+
+                              const distance =
+                                visualDistance(
+                                  x,
+                                  y,
+                                  location.x,
+                                  location.y
+                                );
+
+                              const hardDistance =
+                                locationRadius +
+                                treeRadius *
+                                  0.72;
+
+                              const softDistance =
+                                hardDistance +
+                                1.30;
+
+                              if (
+                                distance <
+                                hardDistance
+                              ) {
+                                hardBlocked =
+                                  true;
+                                break;
+                              }
+
+                              if (
+                                distance <
+                                softDistance
+                              ) {
+                                transitionPressure =
+                                  Math.max(
+                                    transitionPressure,
+                                    1 -
+                                      (
+                                        distance -
+                                        hardDistance
+                                      ) /
+                                        (
+                                          softDistance -
+                                          hardDistance
+                                        )
+                                  );
+                              }
+                            }
+
+                            if (
+                              hardBlocked
+                            ) {
+                              attempt += 1;
+                              continue;
+                            }
+
+                            /*
+                             * Near an obstacle, reject SOME
+                             * complete trees.
+                             *
+                             * This produces lower density
+                             * without opacity or clipping.
+                             */
+                            if (
+                              transitionPressure >
+                                0 &&
+                              stableForestValue(
+                                attempt,
+                                29.417
+                              ) <
+                                transitionPressure *
+                                  0.68
+                            ) {
+                              attempt += 1;
+                              continue;
+                            }
+
+                            trees.push({
+                              x,
+                              y,
+                              scale:
+                                treeScale,
+                              kind,
+                              halfWidth,
+                              halfHeight,
+                            });
+
+                            attempt += 1;
+                          }
+
+                          return (
+                            <g>
+                              {trees.map(
+                                (
+                                  tree,
+                                  index
+                                ) => (
+                                  <g
+                                    key={`whole-forest-tree-${groupKey}-${index}`}
+                                  >
+                                    {storyForgeForestPattern(
+                                      group.style,
+                                      activeMap
+                                        .colors
+                                        .label,
+                                      activeMap
+                                        .colors
+                                        .forest,
+                                      mapDetailTier,
+                                      {
+                                        x:
+                                          tree.x,
+                                        y:
+                                          tree.y,
+                                        scale:
+                                          tree.scale,
+                                        kind:
+                                          tree.kind,
+                                      }
+                                    )}
+                                  </g>
+                                )
+                              )}
+                            </g>
+                          );
+                        })()}
+
+                  </svg>
                 );
               }
             );
