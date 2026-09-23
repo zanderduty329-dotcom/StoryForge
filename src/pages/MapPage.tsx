@@ -4221,6 +4221,674 @@ function riverFlowSegments(
 }
 
 
+/*
+ * STORYFORGE RIVER ENDPOINTS V1
+ *
+ * Finished rivers now understand four endpoint
+ * conditions:
+ *
+ * join   = another river continues the network
+ * mouth  = river reaches lake/ocean water
+ * source = river begins/ends near mountains
+ * open   = no special terrain relationship
+ *
+ * Stored MapPath data remains unchanged.
+ */
+
+type RiverEndpointKind =
+  | "join"
+  | "mouth"
+  | "source"
+  | "open";
+
+function riverEndpointKind(
+  map: StoryMap,
+  mapPath: MapPath,
+  samples: Array<{
+    x: number;
+    y: number;
+  }>,
+  side: "start" | "end"
+): RiverEndpointKind {
+  if (
+    samples.length < 2
+  ) {
+    return "open";
+  }
+
+  const endpoint =
+    side === "start"
+      ? samples[0]
+      : samples[
+          samples.length - 1
+        ];
+
+  /*
+   * A snapped river-to-river connection takes
+   * priority over all terrain interpretation.
+   */
+  const riverJoin =
+    nearestCompatiblePathPoint(
+      map.paths ?? [],
+      "river",
+      undefined,
+      endpoint,
+      Math.max(
+        0.22,
+        mapPath.width *
+          0.45
+      ),
+      mapPath.id
+    );
+
+  if (riverJoin) {
+    return "join";
+  }
+
+  /*
+   * Determine the outward direction by looking
+   * a short distance back along the river.
+   */
+  const inwardIndex =
+    side === "start"
+      ? Math.min(
+          samples.length - 1,
+          5
+        )
+      : Math.max(
+          0,
+          samples.length - 6
+        );
+
+  const inwardPoint =
+    samples[inwardIndex];
+
+  const outwardX =
+    endpoint.x -
+    inwardPoint.x;
+
+  const outwardY =
+    endpoint.y -
+    inwardPoint.y;
+
+  const outwardLength =
+    Math.hypot(
+      outwardX,
+      outwardY
+    );
+
+  const directionX =
+    outwardLength >
+      0.001
+      ? outwardX /
+        outwardLength
+      : 0;
+
+  const directionY =
+    outwardLength >
+      0.001
+      ? outwardY /
+        outwardLength
+      : 0;
+
+  /*
+   * An endpoint already in water is a mouth.
+   */
+  if (
+    !pointIsLand(
+      map,
+      endpoint.x,
+      endpoint.y
+    )
+  ) {
+    return "mouth";
+  }
+
+  /*
+   * Also probe slightly beyond the drawn end.
+   *
+   * This catches a river whose last saved point
+   * stops right on the visible coastline rather
+   * than technically crossing into the water.
+   */
+  if (
+    outwardLength >
+    0.001
+  ) {
+    const probes = [
+      0.28,
+      0.52,
+      0.82,
+    ];
+
+    for (
+      const distance of probes
+    ) {
+      if (
+        !pointIsLand(
+          map,
+          endpoint.x +
+            directionX *
+              distance,
+          endpoint.y +
+            directionY *
+              distance
+        )
+      ) {
+        return "mouth";
+      }
+    }
+  }
+
+  /*
+   * Mountain source detection uses the actual
+   * saved mountain terrain stamps rather than
+   * guessing from what happens to be visible.
+   */
+  for (
+    const stamp of
+    map.terrain
+  ) {
+    if (
+      stamp.type !==
+      "mountain"
+    ) {
+      continue;
+    }
+
+    const sourceRadius =
+      Math.max(
+        1.05,
+        stamp.size *
+          0.46 +
+          mapPath.width *
+            0.45
+      );
+
+    if (
+      Math.hypot(
+        endpoint.x -
+          stamp.x,
+        endpoint.y -
+          stamp.y
+      ) <=
+      sourceRadius
+    ) {
+      return "source";
+    }
+  }
+
+  return "open";
+}
+
+
+/*
+ * STORYFORGE RIVER ENDPOINT TUNING V1.1
+ *
+ * Source and mouth transitions are gentler,
+ * broader, and protected from stacking with
+ * bend widening into oversized river sections.
+ */
+function riverStructuredSegments(
+  map: StoryMap,
+  mapPath: MapPath
+) {
+  if (
+    mapPath.kind !== "river"
+  ) {
+    return [] as Array<{
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      widthFactor: number;
+    }>;
+  }
+
+  const raw =
+    sampleMapPath(
+      mapPath
+    );
+
+  if (
+    raw.length < 2
+  ) {
+    return [];
+  }
+
+  /*
+   * Bound SVG element count while retaining
+   * enough points for smooth width transitions.
+   */
+  const stride =
+    Math.max(
+      1,
+      Math.ceil(
+        raw.length / 280
+      )
+    );
+
+  const points =
+    raw.filter(
+      (_point, index) =>
+        index === 0 ||
+        index ===
+          raw.length - 1 ||
+        index % stride === 0
+    );
+
+  const finalRawPoint =
+    raw[
+      raw.length - 1
+    ];
+
+  const finalPoint =
+    points[
+      points.length - 1
+    ];
+
+  if (
+    finalPoint.x !==
+      finalRawPoint.x ||
+    finalPoint.y !==
+      finalRawPoint.y
+  ) {
+    points.push({
+      ...finalRawPoint,
+    });
+  }
+
+  if (
+    points.length < 2
+  ) {
+    return [];
+  }
+
+  const startKind =
+    riverEndpointKind(
+      map,
+      mapPath,
+      raw,
+      "start"
+    );
+
+  const endKind =
+    riverEndpointKind(
+      map,
+      mapPath,
+      raw,
+      "end"
+    );
+
+  /*
+   * Cumulative distance lets endpoint effects
+   * operate in map distance rather than an
+   * arbitrary number of points.
+   */
+  const cumulative = [0];
+
+  for (
+    let index = 1;
+    index < points.length;
+    index += 1
+  ) {
+    cumulative.push(
+      cumulative[
+        index - 1
+      ] +
+        Math.hypot(
+          points[index].x -
+            points[
+              index - 1
+            ].x,
+          points[index].y -
+            points[
+              index - 1
+            ].y
+        )
+    );
+  }
+
+  const totalLength =
+    cumulative[
+      cumulative.length - 1
+    ];
+
+  const segments: Array<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    widthFactor: number;
+  }> = [];
+
+  /*
+   * Keep the approved V1.1 bend behavior.
+   */
+  const turnWindow = 12;
+
+  const smoothStep = (
+    value: number
+  ) => {
+    const clamped =
+      Math.max(
+        0,
+        Math.min(
+          1,
+          value
+        )
+      );
+
+    return (
+      clamped *
+      clamped *
+      (
+        3 -
+        2 * clamped
+      )
+    );
+  };
+
+  const endpointFactor = (
+    kind: RiverEndpointKind,
+    distance: number
+  ) => {
+    if (
+      kind === "source"
+    ) {
+      const taperLength =
+        Math.max(
+          3.2,
+          mapPath.width *
+            5.6
+        );
+
+      const progress =
+        smoothStep(
+          distance /
+            taperLength
+        );
+
+      /*
+       * Mountain source begins at about 65% of
+       * the selected river width and opens into
+       * the normal channel.
+       */
+      return (
+        0.65 +
+        progress *
+          0.35
+      );
+    }
+
+    if (
+      kind === "mouth"
+    ) {
+      const mouthLength =
+        Math.max(
+          3.0,
+          mapPath.width *
+            5.0
+        );
+
+      const progress =
+        smoothStep(
+          distance /
+            mouthLength
+        );
+
+      /*
+       * Water mouth reaches about 18% broader
+       * than the normal channel right at shore.
+       */
+      return (
+        1.18 -
+        progress *
+          0.18
+      );
+    }
+
+    /*
+     * Joins and ordinary open endpoints stay at
+     * the player's chosen baseline width.
+     */
+    return 1;
+  };
+
+  let previousWidthFactor:
+    number | null =
+    null;
+
+  for (
+    let index = 0;
+    index <
+      points.length - 1;
+    index += 1
+  ) {
+    const start =
+      points[index];
+
+    const end =
+      points[index + 1];
+
+    const centerIndex =
+      Math.max(
+        1,
+        Math.min(
+          points.length - 2,
+          index
+        )
+      );
+
+    const before =
+      points[
+        Math.max(
+          0,
+          centerIndex -
+            turnWindow
+        )
+      ];
+
+    const center =
+      points[
+        centerIndex
+      ];
+
+    const after =
+      points[
+        Math.min(
+          points.length - 1,
+          centerIndex +
+            turnWindow
+        )
+      ];
+
+    const incomingX =
+      center.x -
+      before.x;
+
+    const incomingY =
+      center.y -
+      before.y;
+
+    const outgoingX =
+      after.x -
+      center.x;
+
+    const outgoingY =
+      after.y -
+      center.y;
+
+    const incomingLength =
+      Math.hypot(
+        incomingX,
+        incomingY
+      );
+
+    const outgoingLength =
+      Math.hypot(
+        outgoingX,
+        outgoingY
+      );
+
+    let turnStrength = 0;
+
+    if (
+      incomingLength >
+        0.001 &&
+      outgoingLength >
+        0.001
+    ) {
+      const dot =
+        (
+          incomingX *
+            outgoingX +
+          incomingY *
+            outgoingY
+        ) /
+        (
+          incomingLength *
+          outgoingLength
+        );
+
+      const angle =
+        Math.acos(
+          Math.max(
+            -1,
+            Math.min(
+              1,
+              dot
+            )
+          )
+        );
+
+      turnStrength =
+        Math.min(
+          1,
+          angle /
+            (
+              Math.PI /
+              3
+            )
+        );
+    }
+
+    /*
+     * Bend widening still fades near endpoints
+     * so it does not fight the source/mouth
+     * profile.
+     */
+    const distanceFromStart =
+      index;
+
+    const distanceFromEnd =
+      (
+        points.length -
+        2
+      ) -
+      index;
+
+    const bendFade =
+      Math.max(
+        0,
+        Math.min(
+          1,
+          distanceFromStart /
+            4,
+          distanceFromEnd /
+            4
+        )
+      );
+
+    const bendFactor =
+      1 +
+      turnStrength *
+        bendFade *
+        0.18;
+
+    const midpointDistance =
+      (
+        cumulative[index] +
+        cumulative[
+          index + 1
+        ]
+      ) /
+      2;
+
+    const startFactor =
+      endpointFactor(
+        startKind,
+        midpointDistance
+      );
+
+    const endFactor =
+      endpointFactor(
+        endKind,
+        Math.max(
+          0,
+          totalLength -
+            midpointDistance
+        )
+      );
+
+    /*
+     * Combine the three influences additively
+     * rather than multiplying them.
+     *
+     * That keeps a bend near a mouth from becoming
+     * disproportionately wide.
+     */
+    const targetWidthFactor =
+      Math.max(
+        0.65,
+        Math.min(
+          1.22,
+          1 +
+            (
+              bendFactor -
+              1
+            ) +
+            (
+              startFactor -
+              1
+            ) +
+            (
+              endFactor -
+              1
+            )
+        )
+      );
+
+    /*
+     * Blend each section toward the previous
+     * section so changes read as continuous river
+     * flow rather than discrete pipe sizes.
+     */
+    const widthFactor =
+      previousWidthFactor ===
+      null
+        ? targetWidthFactor
+        : previousWidthFactor *
+            0.58 +
+          targetWidthFactor *
+            0.42;
+
+    previousWidthFactor =
+      widthFactor;
+
+    segments.push({
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      widthFactor,
+    });
+  }
+
+  return segments;
+}
+
+
 function mapPathTouchesPoint(
   mapPath: MapPath,
   x: number,
@@ -9998,9 +10666,12 @@ export function MapPage({
                         edgeColor
                       }
                       strokeWidth={
-                        mapPath.width +
-                        edgeExtra
-                      }
+                          mapPath.kind ===
+                          "river"
+                            ? 0
+                            : mapPath.width +
+                              edgeExtra
+                        }
                       strokeDasharray={
                         dashArray
                       }
@@ -10015,8 +10686,11 @@ export function MapPage({
                         mainColor
                       }
                       strokeWidth={
-                        mapPath.width
-                      }
+                          mapPath.kind ===
+                          "river"
+                            ? 0
+                            : mapPath.width
+                        }
                       strokeDasharray={
                         dashArray
                       }
@@ -10032,7 +10706,8 @@ export function MapPage({
                        */}
                       {mapPath.kind ===
                         "river" &&
-                        riverFlowSegments(
+                        riverStructuredSegments(
+                          activeMap,
                           mapPath
                         ).map(
                           (
