@@ -4370,27 +4370,71 @@ function riverEndpointKind(
     outwardLength >
     0.001
   ) {
+    /*
+     * STORYFORGE RIVER MOUTH DETECTION V1
+     *
+     * The visible coastline is softened and displaced
+     * slightly beyond the raw Land/Water stamp boundary.
+     *
+     * Probe farther forward and a little to either side
+     * so an endpoint touching the visible shoreline still
+     * recognizes the ocean/lake underneath it.
+     */
+    const perpendicularX =
+      -directionY;
+
+    const perpendicularY =
+      directionX;
+
     const probes = [
       0.28,
       0.52,
       0.82,
+      1.08,
+      1.34,
     ];
 
     for (
       const distance of probes
     ) {
-      if (
-        !pointIsLand(
-          map,
-          endpoint.x +
-            directionX *
-              distance,
-          endpoint.y +
-            directionY *
-              distance
-        )
+      /*
+       * Sideways allowance stays intentionally small.
+       * It compensates for coastline smoothing without
+       * turning a river running alongside a coast into
+       * a false mouth.
+       */
+      const lateral =
+        Math.min(
+          0.32,
+          distance * 0.22
+        );
+
+      const offsets = [
+        0,
+        lateral,
+        -lateral,
+      ];
+
+      for (
+        const offset of offsets
       ) {
-        return "mouth";
+        if (
+          !pointIsLand(
+            map,
+            endpoint.x +
+              directionX *
+                distance +
+              perpendicularX *
+                offset,
+            endpoint.y +
+              directionY *
+                distance +
+              perpendicularY *
+                offset
+          )
+        ) {
+          return "mouth";
+        }
       }
     }
   }
