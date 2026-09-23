@@ -735,6 +735,18 @@ function formatMapSize(
 }
 
 
+/*
+ * STORYFORGE TINY TERRAIN PERSISTENCE V1
+ *
+ * The existing Land/Water smoothing filter is
+ * tuned for the old minimum brush size of 1.
+ *
+ * Sub-1 terrain remains as raw saved geometry
+ * so it cannot be eroded away when the stroke
+ * is released.
+ */
+const MIN_AUTO_SMOOTH_TERRAIN_SIZE = 1;
+
 const REGION_COLUMNS = 120;
 const REGION_ROWS = 75;
 const MAP_LOGICAL_ASPECT = 1.6;
@@ -7685,7 +7697,8 @@ export function MapPage({
                     ? {
                         ...stamp,
                         smoothed:
-                          true,
+                            stamp.size >=
+                            MIN_AUTO_SMOOTH_TERRAIN_SIZE,
                       }
                     : stamp
               ),
