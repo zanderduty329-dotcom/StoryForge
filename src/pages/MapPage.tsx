@@ -9680,10 +9680,19 @@ export function MapPage({
                         .colors.water
                     : roadVisual.main;
 
+                /*
+                 * STORYFORGE RIVER CLEAN LINE V1
+                 *
+                 * Rivers use one clean water-colored line.
+                 * The existing edge layer remains structurally
+                 * intact, but matches the river body exactly.
+                 *
+                 * Road edge styling is unchanged.
+                 */
                 const edgeColor =
                   mapPath.kind ===
                   "river"
-                    ? "#335f78"
+                    ? mainColor
                     : roadVisual.edge;
 
                 const dashArray =
@@ -9696,7 +9705,7 @@ export function MapPage({
                 const edgeExtra =
                   mapPath.kind ===
                   "river"
-                    ? 0.55
+                    ? 0
                     : roadVisual
                         .edgeExtra;
 
@@ -9890,7 +9899,7 @@ export function MapPage({
                   const edgeColor =
                     pathDraft.kind ===
                     "river"
-                      ? "#335f78"
+                      ? mainColor
                       : roadVisual.edge;
 
                   const dashArray =
@@ -9903,7 +9912,7 @@ export function MapPage({
                   const edgeExtra =
                     pathDraft.kind ===
                     "river"
-                      ? 0.55
+                      ? 0
                       : roadVisual
                           .edgeExtra;
 
