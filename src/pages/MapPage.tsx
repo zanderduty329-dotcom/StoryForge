@@ -585,6 +585,156 @@ const DEFAULT_TERRAIN_STYLES: Record<
   snow: "snowfield",
 };
 
+/*
+ * STORYFORGE MAP SIZE SCALE V1
+ *
+ * Sliders use graduated logical steps instead
+ * of one uniform increment.
+ *
+ * This gives small-detail work much finer
+ * control while preserving very large sizes
+ * for continents, oceans, and broad biomes.
+ */
+
+const TERRAIN_BRUSH_SIZE_STEPS = [
+  0.25,
+  0.35,
+  0.5,
+  0.65,
+  0.8,
+  1,
+  1.25,
+  1.5,
+  1.75,
+  2,
+  2.5,
+  3,
+  3.5,
+  4,
+  5,
+  6,
+  7,
+  8,
+  10,
+  12,
+  14,
+  16,
+  20,
+  24,
+  28,
+  32,
+  36,
+  40,
+] as const;
+
+const GRID_SIZE_STEPS = [
+  2,
+  3,
+  4,
+  5,
+  6,
+  8,
+  10,
+  12,
+  14,
+  16,
+  20,
+  24,
+  28,
+  32,
+  40,
+  48,
+  56,
+  64,
+  80,
+  96,
+  120,
+] as const;
+
+const RIVER_WIDTH_STEPS = [
+  0.10,
+  0.14,
+  0.18,
+  0.22,
+  0.28,
+  0.35,
+  0.45,
+  0.55,
+  0.70,
+  0.85,
+  1,
+  1.2,
+  1.5,
+  1.8,
+  2.2,
+  2.6,
+  3,
+] as const;
+
+const ROAD_WIDTH_STEPS = [
+  0.04,
+  0.06,
+  0.08,
+  0.10,
+  0.12,
+  0.15,
+  0.18,
+  0.22,
+  0.28,
+  0.32,
+  0.38,
+  0.45,
+  0.55,
+  0.70,
+  0.85,
+  1,
+] as const;
+
+function nearestMapSizeIndex(
+  steps: readonly number[],
+  value: number
+) {
+  let closestIndex = 0;
+  let closestDistance =
+    Number.POSITIVE_INFINITY;
+
+  for (
+    let index = 0;
+    index < steps.length;
+    index += 1
+  ) {
+    const distance =
+      Math.abs(
+        steps[index] -
+        value
+      );
+
+    if (
+      distance <
+      closestDistance
+    ) {
+      closestDistance =
+        distance;
+
+      closestIndex =
+        index;
+    }
+  }
+
+  return closestIndex;
+}
+
+function formatMapSize(
+  value: number
+) {
+  return String(
+    Number(
+      value.toFixed(2)
+    )
+  );
+}
+
+
 const REGION_COLUMNS = 120;
 const REGION_ROWS = 75;
 const MAP_LOGICAL_ASPECT = 1.6;
@@ -8580,28 +8730,45 @@ export function MapPage({
 
                 <input
                   type="range"
-                  min={
-                    tool === "river"
-                      ? "0.5"
-                      : "0.15"
-                  }
+                  min="0"
                   max={
-                    tool === "river"
-                      ? "3"
-                      : "1"
+                    (
+                      tool === "river"
+                        ? RIVER_WIDTH_STEPS
+                        : ROAD_WIDTH_STEPS
+                    ).length - 1
                   }
-                  step={
-                    tool === "river"
-                      ? "0.1"
-                      : "0.05"
+                  step="1"
+                  value={
+                    nearestMapSizeIndex(
+                      tool === "river"
+                        ? RIVER_WIDTH_STEPS
+                        : ROAD_WIDTH_STEPS,
+                      pathWidth
+                    )
                   }
-                  value={pathWidth}
                   onChange={(event) => {
-                    const nextWidth =
+                    const widthSteps =
+                      tool === "river"
+                        ? RIVER_WIDTH_STEPS
+                        : ROAD_WIDTH_STEPS;
+
+                    const index =
                       Number(
-                        event.target
-                          .value
+                        event.target.value
                       );
+
+                    const nextWidth =
+                      widthSteps[
+                        index
+                      ];
+
+                    if (
+                      nextWidth ===
+                      undefined
+                    ) {
+                      return;
+                    }
 
                     setPathWidth(
                       nextWidth
@@ -8621,7 +8788,9 @@ export function MapPage({
                 />
 
                 <span>
-                  {pathWidth.toFixed(1)}
+                  {formatMapSize(
+                    pathWidth
+                  )}
                 </span>
               </label>
 
@@ -8861,17 +9030,44 @@ export function MapPage({
                 Brush
                 <input
                   type="range"
-                  min="1"
-                  max="40"
+                  min="0"
+                  max={
+                    TERRAIN_BRUSH_SIZE_STEPS.length -
+                    1
+                  }
                   step="1"
-                  value={brushSize}
-                  onChange={(event) =>
-                    setBrushSize(
-                      Number(event.target.value)
+                  value={
+                    nearestMapSizeIndex(
+                      TERRAIN_BRUSH_SIZE_STEPS,
+                      brushSize
                     )
                   }
+                  onChange={(event) => {
+                    const index =
+                      Number(
+                        event.target.value
+                      );
+
+                    const nextSize =
+                      TERRAIN_BRUSH_SIZE_STEPS[
+                        index
+                      ];
+
+                    if (
+                      nextSize !==
+                      undefined
+                    ) {
+                      setBrushSize(
+                        nextSize
+                      );
+                    }
+                  }}
                 />
-                <span>{brushSize}</span>
+                <span>
+                  {formatMapSize(
+                    brushSize
+                  )}
+                </span>
               </label>
 
               <label className="sf-map-brush-control-v2">
@@ -8897,17 +9093,44 @@ export function MapPage({
               Grid Size
               <input
                 type="range"
-                min="8"
-                max="120"
-                step="2"
-                value={gridSize}
-                onChange={(event) =>
-                  setGridSize(
-                    Number(event.target.value)
+                min="0"
+                max={
+                  GRID_SIZE_STEPS.length -
+                  1
+                }
+                step="1"
+                value={
+                  nearestMapSizeIndex(
+                    GRID_SIZE_STEPS,
+                    gridSize
                   )
                 }
+                onChange={(event) => {
+                  const index =
+                    Number(
+                      event.target.value
+                    );
+
+                  const nextSize =
+                    GRID_SIZE_STEPS[
+                      index
+                    ];
+
+                  if (
+                    nextSize !==
+                    undefined
+                  ) {
+                    setGridSize(
+                      nextSize
+                    );
+                  }
+                }}
               />
-              <span>{gridSize}px</span>
+              <span>
+                {formatMapSize(
+                  gridSize
+                )}px
+              </span>
             </label>
           )}
 
@@ -10328,7 +10551,7 @@ const landMaskId =
                       {group.terrainType === "snow" && (
                           <>
                             {/*
-                             * STORYFORGE SNOW ICE COAST V2
+                             * STORYFORGE SNOW ICE COAST V8
                              *
                              * Simpler than V1:
                              *
@@ -10402,15 +10625,32 @@ const landMaskId =
                                 in="SourceGraphic"
                                 operator="dilate"
                                 radius={
-                                  `1.30 ${1.30 * canvasAspect}`
+                                  `0.92 ${0.92 * canvasAspect}`
                                 }
                                 result="snowOuter"
                               />
 
-                              <feGaussianBlur
+                              <feTurbulence
+                                type="fractalNoise"
+                                baseFrequency="0.72 0.54"
+                                numOctaves="2"
+                                seed="71"
+                                result="iceOuterNoise"
+                              />
+
+                              <feDisplacementMap
                                 in="snowOuter"
+                                in2="iceOuterNoise"
+                                scale="0.34"
+                                xChannelSelector="R"
+                                yChannelSelector="G"
+                                result="snowOuterNatural"
+                              />
+
+                              <feGaussianBlur
+                                in="snowOuterNatural"
                                 stdDeviation={
-                                  `0.30 ${0.30 * canvasAspect}`
+                                  `0.008 ${0.008 * canvasAspect}`
                                 }
                               />
                             </filter>
@@ -10432,15 +10672,32 @@ const landMaskId =
                                 in="SourceGraphic"
                                 operator="dilate"
                                 radius={
-                                  `0.72 ${0.72 * canvasAspect}`
+                                  `0.44 ${0.44 * canvasAspect}`
                                 }
                                 result="snowInner"
                               />
 
-                              <feGaussianBlur
+                              <feTurbulence
+                                type="fractalNoise"
+                                baseFrequency="0.86 0.66"
+                                numOctaves="2"
+                                seed="43"
+                                result="iceInnerNoise"
+                              />
+
+                              <feDisplacementMap
                                 in="snowInner"
+                                in2="iceInnerNoise"
+                                scale="0.16"
+                                xChannelSelector="R"
+                                yChannelSelector="G"
+                                result="snowInnerNatural"
+                              />
+
+                              <feGaussianBlur
+                                in="snowInnerNatural"
                                 stdDeviation={
-                                  `0.09 ${0.09 * canvasAspect}`
+                                  `0.004 ${0.004 * canvasAspect}`
                                 }
                               />
                             </filter>
@@ -10507,6 +10764,23 @@ const landMaskId =
                           pointerEvents="none"
                         >
                           {/*
+                             * STORYFORGE SNOW COAST COVER V3
+                             *
+                             * Snow reaches the frozen shore instead of
+                             * leaving the normal tan land rim exposed.
+                             */}
+                            <rect
+                              x="0"
+                              y="0"
+                              width="100"
+                              height="100"
+                              fill="#eef7f8"
+                              opacity="1"
+                              mask={`url(#${maskId})`}
+                            />
+
+
+                            {/*
                            * OUTER ICE FADE
                            *
                            * Slight blue-white tint extending into
@@ -10517,14 +10791,14 @@ const landMaskId =
                             filter={
                               `url(#sf-snow-ice-outer-${safeKey})`
                             }
-                            opacity="0.36"
+                            opacity="0.14"
                           >
                             <rect
                               x="0"
                               y="0"
                               width="100"
                               height="100"
-                              fill="#c7e7ed"
+                              fill="#66bdd8"
                               mask={`url(#${maskId})`}
                             />
                           </g>
@@ -10540,14 +10814,14 @@ const landMaskId =
                             filter={
                               `url(#sf-snow-ice-inner-${safeKey})`
                             }
-                            opacity="0.78"
+                            opacity="0.38"
                           >
                             <rect
                               x="0"
                               y="0"
                               width="100"
                               height="100"
-                              fill="#e8f7f8"
+                              fill="#a7ddea"
                               mask={`url(#${maskId})`}
                             />
                           </g>
@@ -10563,8 +10837,16 @@ const landMaskId =
                       y="0"
                       width="100"
                       height="100"
-                      fill={fill}
-                      opacity="0.88"
+                      fill={
+                        group.terrainType === "snow"
+                          ? "#edf4f3"
+                          : fill
+                      }
+                      opacity={
+                        group.terrainType === "snow"
+                          ? 0.96
+                          : 0.88
+                      }
                       mask={
                         `url(#${maskId})`
                       }
@@ -10798,7 +11080,7 @@ const landMaskId =
                                 index
                               ) => {
                                 /*
-                                 * STORYFORGE SNOW ART V1
+                                 * STORYFORGE SNOW ART V2
                                  *
                                  * Snow previously used a Unicode
                                  * sparkle/triangle. It now uses the
@@ -10811,31 +11093,109 @@ const landMaskId =
                                   "snow"
                                 ) {
                                   const snowStyle =
-                                    group.style ??
-                                    "snowfield";
+                                      group.style ??
+                                      "snowfield";
 
-                                  return (
+                                    /*
+                                     * STORYFORGE ORGANIC SNOWDRIFT V9
+                                     *
+                                     * Snowfield symbols are stretched into
+                                     * broad wind-shaped ridges instead of
+                                     * reading like miniature mountains.
+                                     *
+                                     * Variation is based on placement index,
+                                     * so the artwork remains stable between
+                                     * React renders.
+                                     */
+                                    /*
+                                       * STORYFORGE SNOW DENSITY V8
+                                       *
+                                       * Snow formations are deliberately
+                                       * sparser than grasses/desert marks.
+                                       * Larger open white areas make the
+                                       * individual snow hills readable.
+                                       */
+                                      if (
+                                        snowStyle === "snowfield" &&
+                                        index % 3 === 2
+                                      ) {
+                                        return null;
+                                      }
+
+                                      const snowVariant =
+                                        index % 5;
+
+                                      /*
+                                       * STORYFORGE SNOWDRIFT SHAPE V7
+                                       *
+                                       * Larger hand-drawn snow ridges with
+                                       * enough rise to read from normal map
+                                       * zoom, while staying softer than the
+                                       * dedicated mountain renderer.
+                                       */
+                                      const snowStretch =
+                                        snowStyle ===
+                                        "snowfield"
+                                          ? 1.12 +
+                                            snowVariant *
+                                              0.045
+                                          : 1;
+
+                                      const snowHeight =
+                                        snowStyle ===
+                                        "snowfield"
+                                          ? 0.96 +
+                                            (
+                                              index % 3
+                                            ) *
+                                              0.050
+                                          : 1;
+
+                                      const snowScale =
+                                        snowStyle ===
+                                        "snowfield"
+                                          ? 1.28 +
+                                            (
+                                              index % 3
+                                            ) *
+                                              0.060
+                                          : 1;
+
+                                      /*
+                                       * Mild shared wind direction.
+                                       */
+                                      const snowRotation =
+                                        snowStyle ===
+                                        "snowfield"
+                                          ? placement.rotation *
+                                              0.18 +
+                                            (
+                                              index % 4 === 0
+                                                ? -1.1
+                                                : index % 4 === 2
+                                                  ? 0.9
+                                                  : 0
+                                            )
+                                          : placement.rotation;
+
+                                      return (
                                     <g
                                       key={
                                         `biome-direct-${groupKey}-${index}`
                                       }
                                       transform={
                                         `translate(${placement.x} ${placement.y}) ` +
-                                        `rotate(${placement.rotation}) ` +
-                                        `scale(${placement.scale})`
+                                          `rotate(${snowRotation}) ` +
+                                          `scale(${placement.scale * snowStretch * snowScale} ${placement.scale * snowHeight * snowScale})`
                                       }
                                       fill="none"
-                                      stroke={
-                                        activeMap
-                                          .colors
-                                          .label
-                                      }
-                                      strokeLinecap="round"
+                                      stroke="#344a52"
+                                        strokeLinecap="round"
                                       strokeLinejoin="round"
-                                      opacity="0.66"
+                                      opacity="0.96"
                                     >
                                       {/*
-                                         * STORYFORGE SNOW TONAL SHADOW V2
+                                         * STORYFORGE SNOW TONAL SHADOW V8
                                          *
                                          * A cooler version of the desert
                                          * tonal-depth treatment.
@@ -10846,22 +11206,22 @@ const landMaskId =
                                          * to look like another ink line.
                                          */}
                                         <path
-                                          d="
-                                            M-1.55 0.45
-                                            C-1.18 0.34 -0.95 0.10 -0.66 -0.12
-                                            C-0.39 -0.32 -0.13 -0.38 0.11 -0.25
-                                            C0.36 -0.12 0.51 0.13 0.78 0.27
-                                            C1.03 0.40 1.30 0.41 1.54 0.47
-                                            C1.13 0.62 0.62 0.70 0.07 0.71
-                                            C-0.49 0.72 -1.06 0.63 -1.55 0.45
-                                            Z
-                                          "
-                                          fill="#718e98"
-                                          stroke="none"
-                                          opacity="0.18"
-                                        />
+                                            d="
+                                              M-1.62 0.50
+                                              C-1.28 0.43 -1.02 0.25 -0.78 0.07
+                                              C-0.50 -0.14 -0.24 -0.20 0.02 -0.08
+                                              C0.28 0.04 0.45 0.30 0.72 0.39
+                                              C0.99 0.48 1.27 0.40 1.58 0.45
+                                              C1.17 0.66 0.66 0.76 0.09 0.77
+                                              C-0.51 0.78 -1.08 0.69 -1.62 0.50
+                                              Z
+                                            "
+                                            fill="#7298a7"
+                                            stroke="none"
+                                            opacity="0.10"
+                                          />
 
-                                        {snowStyle ===
+                                          {snowStyle ===
                                       "ice" ? (
                                         <>
                                           {/*
@@ -10961,60 +11321,133 @@ const landMaskId =
                                       ) : (
                                         <>
                                           {/*
-                                           * Default Snowfield.
-                                           *
-                                           * Uneven layered drifts and
-                                           * tiny wind/snow marks make
-                                           * the symbol feel sketched
-                                           * onto the map rather than
-                                           * stamped on top of it.
-                                           */}
-                                          <path
-                                            d="
-                                              M-1.46 0.18
-                                              C-1.02 -0.12 -0.59 -0.16 -0.23 0.01
-                                              C0.13 0.19 0.45 -0.24 0.84 -0.16
-                                              C1.09 -0.11 1.27 0.02 1.45 0.12
-                                            "
-                                            strokeWidth="0.16"
-                                          />
+                                             * STORYFORGE ORGANIC SNOWFIELD V8
+                                             *
+                                             * Hand-drawn wind-sculpted snow.
+                                             *
+                                             * These are broad snowbanks and
+                                             * accumulated drift lines rather
+                                             * than fantasy mountain symbols.
+                                             */}
+                                            
+                                              {/*
+                                               * MAIN SNOWBANK CREST
+                                               */}
+                                              {/*
+                                               * VARIANT A
+                                               * Tall double snowbank.
+                                               */}
+                                              {snowVariant % 3 === 0 && (
+                                                <path
+                                                  d="
+                                                    M-1.58 0.40
+                                                    C-1.38 0.32 -1.24 0.15 -1.08 -0.06
+                                                    C-0.91 -0.30 -0.74 -0.52 -0.55 -0.50
+                                                    C-0.37 -0.48 -0.22 -0.25 -0.08 0.02
+                                                    C0.03 0.23 0.17 0.27 0.30 0.07
+                                                    C0.47 -0.19 0.59 -0.55 0.79 -0.66
+                                                    C0.99 -0.76 1.17 -0.51 1.30 -0.24
+                                                    C1.43 0.00 1.50 0.22 1.58 0.32
+                                                  "
+                                                  strokeWidth="0.20"
+                                                  vectorEffect="non-scaling-stroke"
+                                                />
+                                              )}
 
-                                          <path
-                                            d="
-                                              M-1.18 0.59
-                                              C-0.76 0.39 -0.38 0.52 -0.05 0.39
-                                              C0.27 0.26 0.53 0.38 0.77 0.34
-                                              C1.00 0.30 1.16 0.20 1.34 0.29
-                                            "
-                                            strokeWidth="0.13"
-                                            opacity="0.72"
-                                          />
+                                              {/*
+                                               * VARIANT B
+                                               * Long wind-packed ridge.
+                                               */}
+                                              {snowVariant % 3 === 1 && (
+                                                <path
+                                                  d="
+                                                    M-1.62 0.36
+                                                    C-1.42 0.30 -1.27 0.13 -1.10 -0.04
+                                                    C-0.92 -0.23 -0.74 -0.36 -0.56 -0.31
+                                                    C-0.37 -0.26 -0.21 -0.06 -0.03 0.02
+                                                    C0.16 0.10 0.31 0.02 0.46 -0.15
+                                                    C0.62 -0.34 0.78 -0.46 0.95 -0.43
+                                                    C1.15 -0.39 1.31 -0.17 1.45 0.05
+                                                    C1.52 0.16 1.57 0.27 1.62 0.31
+                                                  "
+                                                  strokeWidth="0.195"
+                                                  vectorEffect="non-scaling-stroke"
+                                                />
+                                              )}
 
-                                          <path
-                                            d="
-                                              M-0.93 0.91
-                                              C-0.51 0.76 -0.09 0.87 0.24 0.77
-                                              C0.58 0.67 0.88 0.76 1.11 0.84
-                                            "
-                                            strokeWidth="0.10"
-                                            opacity="0.38"
-                                          />
+                                              {/*
+                                               * VARIANT C
+                                               * Asymmetrical drift.
+                                               */}
+                                              {snowVariant % 3 === 2 && (
+                                                <path
+                                                  d="
+                                                    M-1.55 0.37
+                                                    C-1.34 0.29 -1.17 0.06 -0.99 -0.18
+                                                    C-0.82 -0.40 -0.65 -0.45 -0.49 -0.34
+                                                    C-0.33 -0.23 -0.21 -0.05 -0.04 0.02
+                                                    C0.12 0.10 0.25 0.07 0.38 -0.06
+                                                    C0.52 -0.20 0.65 -0.40 0.82 -0.46
+                                                    C1.01 -0.52 1.17 -0.34 1.30 -0.14
+                                                    C1.41 0.03 1.48 0.22 1.55 0.30
+                                                  "
+                                                  strokeWidth="0.20"
+                                                  vectorEffect="non-scaling-stroke"
+                                                />
+                                              )}
 
-                                          <path
-                                            d="
-                                              M-0.84 -0.55
-                                              L-0.68 -0.72
+                                              {/*
+                                               * INNER SNOW CONTOURS
+                                               */}
+                                              <path
+                                                d="
+                                                  M-1.20 0.20
+                                                  C-1.04 0.09 -0.91 -0.09 -0.77 -0.18
+                                                  C-0.63 -0.27 -0.51 -0.20 -0.40 -0.06
 
-                                              M0.02 -0.62
-                                              L0.12 -0.82
+                                                  M0.38 0.10
+                                                  C0.52 -0.09 0.62 -0.31 0.77 -0.40
+                                                  C0.91 -0.48 1.04 -0.33 1.15 -0.14
+                                                "
+                                                strokeWidth="0.105"
+                                                opacity="0.80"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
 
-                                              M0.79 -0.48
-                                              L0.98 -0.63
-                                            "
-                                            strokeWidth="0.11"
-                                            opacity="0.48"
-                                          />
-                                        </>
+                                              {/*
+                                               * LOWER ACCUMULATION
+                                               */}
+                                              <path
+                                                d="
+                                                  M-1.45 0.67
+                                                  C-1.18 0.57 -0.94 0.48 -0.67 0.49
+                                                  C-0.42 0.50 -0.20 0.61 0.03 0.60
+
+                                                  M0.22 0.59
+                                                  C0.47 0.55 0.69 0.44 0.94 0.44
+                                                  C1.17 0.45 1.36 0.53 1.50 0.58
+                                                "
+                                                strokeWidth="0.105"
+                                                opacity="0.58"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
+
+                                              {/*
+                                               * SMALL BROKEN WIND MARKS
+                                               */}
+                                              <path
+                                                d="
+                                                  M-1.04 0.92
+                                                  C-0.82 0.85 -0.60 0.86 -0.40 0.90
+
+                                                  M0.04 0.88
+                                                  C0.27 0.82 0.50 0.83 0.72 0.88
+                                                "
+                                                strokeWidth="0.075"
+                                                opacity="0.29"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
+                                            </>
                                       )}
                                     </g>
                                   );
