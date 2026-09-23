@@ -3943,6 +3943,284 @@ function sampleMapPath(
   return sampled;
 }
 
+/*
+ * STORYFORGE RIVER FLOW STRUCTURE V1
+ *
+ * The player's chosen river width remains
+ * the baseline.
+ *
+ * Actual local curvature can widen a river
+ * slightly through bends. Straight portions
+ * remain at baseline width.
+ *
+ * Sources and mouths are intentionally left
+ * unchanged for the next structural pass.
+ */
+function riverFlowSegments(
+  mapPath: MapPath
+) {
+  if (
+    mapPath.kind !== "river"
+  ) {
+    return [] as Array<{
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      widthFactor: number;
+    }>;
+  }
+
+  const raw =
+    sampleMapPath(
+      mapPath
+    );
+
+  if (
+    raw.length < 4
+  ) {
+    return [];
+  }
+
+  /*
+   * Bound the amount of SVG work on very
+   * long Freehand rivers.
+   */
+  const stride =
+    Math.max(
+      1,
+      Math.ceil(
+        raw.length / 260
+      )
+    );
+
+  const points =
+    raw.filter(
+      (_point, index) =>
+        index === 0 ||
+        index ===
+          raw.length - 1 ||
+        index % stride === 0
+    );
+
+  const finalRawPoint =
+    raw[
+      raw.length - 1
+    ];
+
+  const finalPoint =
+    points[
+      points.length - 1
+    ];
+
+  if (
+    finalPoint.x !==
+      finalRawPoint.x ||
+    finalPoint.y !==
+      finalRawPoint.y
+  ) {
+    points.push({
+      ...finalRawPoint,
+    });
+  }
+
+  const segments: Array<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    widthFactor: number;
+  }> = [];
+
+  /*
+   * Measure a bend across several nearby
+   * samples so mouse jitter does not cause
+   * random width changes.
+   */
+  /*
+   * STORYFORGE RIVER FLOW TUNING V1.1
+   *
+   * Look farther along the river so broad,
+   * visible meanders influence width instead
+   * of only tiny local direction changes.
+   */
+  const turnWindow = 12;
+
+  for (
+    let index = 0;
+    index <
+      points.length - 1;
+    index += 1
+  ) {
+    const start =
+      points[index];
+
+    const end =
+      points[index + 1];
+
+    const centerIndex =
+      Math.max(
+        1,
+        Math.min(
+          points.length - 2,
+          index
+        )
+      );
+
+    const before =
+      points[
+        Math.max(
+          0,
+          centerIndex -
+            turnWindow
+        )
+      ];
+
+    const center =
+      points[
+        centerIndex
+      ];
+
+    const after =
+      points[
+        Math.min(
+          points.length - 1,
+          centerIndex +
+            turnWindow
+        )
+      ];
+
+    const incomingX =
+      center.x -
+      before.x;
+
+    const incomingY =
+      center.y -
+      before.y;
+
+    const outgoingX =
+      after.x -
+      center.x;
+
+    const outgoingY =
+      after.y -
+      center.y;
+
+    const incomingLength =
+      Math.hypot(
+        incomingX,
+        incomingY
+      );
+
+    const outgoingLength =
+      Math.hypot(
+        outgoingX,
+        outgoingY
+      );
+
+    let turnStrength = 0;
+
+    if (
+      incomingLength >
+        0.001 &&
+      outgoingLength >
+        0.001
+    ) {
+      const dot =
+        (
+          incomingX *
+            outgoingX +
+          incomingY *
+            outgoingY
+        ) /
+        (
+          incomingLength *
+          outgoingLength
+        );
+
+      const clampedDot =
+        Math.max(
+          -1,
+          Math.min(
+            1,
+            dot
+          )
+        );
+
+      const angle =
+        Math.acos(
+          clampedDot
+        );
+
+      /*
+       * A substantial bend approaches maximum
+       * widening, but the effect is deliberately
+       * restrained.
+       */
+      turnStrength =
+        Math.min(
+          1,
+          angle /
+            (
+              Math.PI /
+              3
+            )
+        );
+    }
+
+    /*
+     * Keep both endpoints at normal width.
+     * Source/mouth tapering comes later.
+     */
+    const distanceFromStart =
+      index;
+
+    const distanceFromEnd =
+      (
+        points.length -
+        2
+      ) -
+      index;
+
+    const endpointFade =
+      Math.max(
+        0,
+        Math.min(
+          1,
+          distanceFromStart /
+            4,
+          distanceFromEnd /
+            4
+        )
+      );
+
+    /*
+     * Maximum bend widening = 18%.
+     */
+    const widthFactor =
+      1 +
+      turnStrength *
+        endpointFade *
+        0.18;
+
+    if (
+      widthFactor >
+      1.005
+    ) {
+      segments.push({
+        x1: start.x,
+        y1: start.y,
+        x2: end.x,
+        y2: end.y,
+        widthFactor,
+      });
+    }
+  }
+
+  return segments;
+}
+
+
 function mapPathTouchesPoint(
   mapPath: MapPath,
   x: number,
@@ -9745,7 +10023,53 @@ export function MapPage({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     />
-                  </g>
+                  {/*
+                       * Organic bend widening.
+                       *
+                       * The normal river remains underneath.
+                       * Only curved portions receive this
+                       * subtle same-color widening pass.
+                       */}
+                      {mapPath.kind ===
+                        "river" &&
+                        riverFlowSegments(
+                          mapPath
+                        ).map(
+                          (
+                            segment,
+                            index
+                          ) => (
+                            <line
+                              key={
+                                `river-flow-${mapPath.id}-${index}`
+                              }
+                              x1={
+                                segment.x1
+                              }
+                              y1={
+                                segment.y1
+                              }
+                              x2={
+                                segment.x2
+                              }
+                              y2={
+                                segment.y2
+                              }
+                              stroke={
+                                mainColor
+                              }
+                              strokeWidth={
+                                mapPath.width *
+                                segment.widthFactor
+                              }
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              pointerEvents="none"
+                            />
+                          )
+                        )}
+
+                    </g>
                 );
               }
             )}
@@ -9800,9 +10124,13 @@ export function MapPage({
                             mapPath.id
                           );
 
-                        if (!join) {
-                          return null;
-                        }
+                        if (
+                            !join ||
+                            mapPath.kind ===
+                              "river"
+                          ) {
+                            return null;
+                          }
 
                         const roadVisual =
                           roadVisualForStyle(
