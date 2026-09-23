@@ -3303,11 +3303,26 @@ function buildStoryForgeForestEntities(
       const a = mapPath.points[i - 1];
       const b = mapPath.points[i];
 
-      const clearance =
-        mapPath.width / 2 +
-        (mapPath.kind === "river"
-          ? 0.82
-          : 0.58);
+      /*
+         * STORYFORGE FOREST RIVER CLEARANCE V2
+         *
+         * Structured rivers may reach 122% of their
+         * stored baseline width through bends/mouths.
+         *
+         * Forest placement therefore reserves the
+         * maximum visible half-width plus enough
+         * breathing room for the actual tree artwork.
+         *
+         * Roads retain their existing clearance.
+         */
+        const clearance =
+          mapPath.kind === "river"
+            ? mapPath.width *
+                0.61 +
+              1.05
+            : mapPath.width /
+                2 +
+              0.58;
 
       if (!b.curveFromPrevious) {
         pathSegments.push({
