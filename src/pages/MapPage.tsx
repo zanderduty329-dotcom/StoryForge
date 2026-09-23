@@ -773,27 +773,37 @@ function terrainSymbol(
   }
 
   if (type === "desert") {
-    if (selected === "dunes") return "∿";
-    if (selected === "barren") return "·";
-    return "";
+    if (selected === "dunes") return "dunes";
+    if (selected === "sand-marks") return "sand";
+    if (selected === "barren") return "barren";
+    return "dunes";
   }
 
   if (type === "plains") {
-    if (selected === "grass") return "〽";
-    if (selected === "sparse") return "ˎ ˎ";
-    return "";
+    if (selected === "grass") return "grass";
+    if (selected === "hatch") return "hatch";
+    if (selected === "sparse") return "sparse";
+    return "grass";
   }
 
   if (type === "swamp") {
-    if (selected === "reeds") return "ǀǀ";
-    if (selected === "dead-trees") return "†";
-    return "";
+    if (selected === "reeds") return "reeds";
+    if (selected === "marsh") return "marsh";
+    if (selected === "dead-trees") return "dead-trees";
+    return "reeds";
   }
 
   if (type === "snow") {
-    if (selected === "snowfield") return "✦";
-    if (selected === "snow-peaks") return "△";
-    return "";
+    /*
+     * These values now act only as internal
+     * style-presence markers. Snow artwork is
+     * rendered as custom SVG below rather than
+     * as Unicode text.
+     */
+    if (selected === "snowfield") return "snow";
+    if (selected === "ice") return "ice";
+    if (selected === "snow-peaks") return "peaks";
+    return "snow";
   }
 
   return "";
@@ -2490,6 +2500,523 @@ function buildStoryForgeBiomeSymbolEntities(
 
 
   return placements;
+}
+
+
+
+
+type StoryForgeSwampPool = {
+  id: string;
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+  rotation: number;
+  variant: number;
+};
+
+type StoryForgeSwampChannel = {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  control1X: number;
+  control1Y: number;
+  control2X: number;
+  control2Y: number;
+  width: number;
+};
+
+type StoryForgeSwampWater = {
+  pools: StoryForgeSwampPool[];
+  channels: StoryForgeSwampChannel[];
+};
+
+
+function buildStoryForgeSwampWaterFeatures(
+  cells: Set<string>,
+  columns: number,
+  rows: number
+): StoryForgeSwampWater {
+  const swampCells =
+    new Set<string>();
+
+  cells.forEach((key) => {
+    const {
+      column,
+      row,
+    } = parseCellKey(key);
+
+    swampCells.add(
+      `${column}:${row}`
+    );
+  });
+
+
+  const hasCell = (
+    column: number,
+    row: number
+  ) =>
+    column >= 0 &&
+    row >= 0 &&
+    column < columns &&
+    row < rows &&
+    swampCells.has(
+      `${column}:${row}`
+    );
+
+
+  const unit = (
+    column: number,
+    row: number,
+    salt: number
+  ) => {
+    const raw =
+      Math.sin(
+        column * 12.9898 +
+        row * 78.233 +
+        salt * 37.719
+      ) *
+      43758.5453;
+
+    return (
+      raw -
+      Math.floor(raw)
+    );
+  };
+
+
+  const cellWidth =
+    100 / columns;
+
+  const cellHeight =
+    100 / rows;
+
+
+  const pools:
+    StoryForgeSwampPool[] =
+    [];
+
+
+  /*
+   * Find broad interior swamp cells.
+   * These become candidates for natural
+   * wetland pools.
+   */
+  [...swampCells]
+    .sort()
+    .forEach((key) => {
+      const [
+        columnText,
+        rowText,
+      ] = key.split(":");
+
+      const column =
+        Number(columnText);
+
+      const row =
+        Number(rowText);
+
+      let neighbors = 0;
+
+      for (
+        let dy = -1;
+        dy <= 1;
+        dy += 1
+      ) {
+        for (
+          let dx = -1;
+          dx <= 1;
+          dx += 1
+        ) {
+          if (
+            dx === 0 &&
+            dy === 0
+          ) {
+            continue;
+          }
+
+          if (
+            hasCell(
+              column + dx,
+              row + dy
+            )
+          ) {
+            neighbors += 1;
+          }
+        }
+      }
+
+
+      /*
+       * Keep most water away from the outer
+       * swamp boundary.
+       */
+      if (neighbors < 5) {
+        return;
+      }
+
+
+      const chance =
+        neighbors >= 8
+          ? 0.16
+          : neighbors >= 7
+            ? 0.115
+            : 0.075;
+
+
+      if (
+        unit(
+          column,
+          row,
+          3.17
+        ) > chance
+      ) {
+        return;
+      }
+
+
+      const x =
+        (
+          column +
+          0.5 +
+          (
+            unit(
+              column,
+              row,
+              7.31
+            ) -
+            0.5
+          ) *
+          0.58
+        ) *
+        cellWidth;
+
+      const y =
+        (
+          row +
+          0.5 +
+          (
+            unit(
+              column,
+              row,
+              11.73
+            ) -
+            0.5
+          ) *
+          0.58
+        ) *
+        cellHeight;
+
+
+      /*
+       * Prevent evenly packed puddles.
+       */
+      const tooClose =
+        pools.some(
+          (pool) =>
+            Math.hypot(
+              pool.x - x,
+              pool.y - y
+            ) < 3.15
+        );
+
+      if (tooClose) {
+        return;
+      }
+
+
+      const sizeSeed =
+        unit(
+          column,
+          row,
+          17.49
+        );
+
+
+      pools.push({
+        id:
+          `swamp-pool-${column}-${row}`,
+
+        x,
+        y,
+
+        rx:
+          0.95 +
+          sizeSeed *
+            1.25,
+
+        ry:
+          0.42 +
+          unit(
+            column,
+            row,
+            21.27
+          ) *
+            0.68,
+
+        rotation:
+          (
+            unit(
+              column,
+              row,
+              29.71
+            ) -
+            0.5
+          ) *
+          46,
+
+        variant:
+          Math.floor(
+            unit(
+              column,
+              row,
+              31.93
+            ) *
+              3
+          ),
+      });
+    });
+
+
+  /*
+   * A reasonably sized swamp should never
+   * end up completely dry because of random
+   * candidate rejection.
+   */
+  if (
+    swampCells.size >= 25 &&
+    pools.length === 0
+  ) {
+    const cellsArray =
+      [...swampCells];
+
+    const fallbackKey =
+      cellsArray[
+        Math.floor(
+          cellsArray.length *
+            0.5
+        )
+      ];
+
+    if (fallbackKey) {
+      const [
+        columnText,
+        rowText,
+      ] =
+        fallbackKey.split(":");
+
+      const column =
+        Number(columnText);
+
+      const row =
+        Number(rowText);
+
+      pools.push({
+        id:
+          "swamp-pool-fallback",
+
+        x:
+          (
+            column +
+            0.5
+          ) *
+          cellWidth,
+
+        y:
+          (
+            row +
+            0.5
+          ) *
+          cellHeight,
+
+        rx: 1.55,
+        ry: 0.68,
+        rotation: -8,
+        variant: 0,
+      });
+    }
+  }
+
+
+  const channels:
+    StoryForgeSwampChannel[] =
+    [];
+
+
+  /*
+   * Connect selected nearby pools with
+   * winding wetland channels.
+   */
+  pools.forEach(
+    (pool, index) => {
+      let nearest:
+        StoryForgeSwampPool |
+        null =
+        null;
+
+      let nearestDistance =
+        Infinity;
+
+
+      for (
+        let otherIndex =
+          index + 1;
+        otherIndex <
+          pools.length;
+        otherIndex += 1
+      ) {
+        const other =
+          pools[
+            otherIndex
+          ];
+
+        const distance =
+          Math.hypot(
+            other.x -
+              pool.x,
+            other.y -
+              pool.y
+          );
+
+        if (
+          distance >= 3.0 &&
+          distance <= 11 &&
+          distance <
+            nearestDistance
+        ) {
+          nearest =
+            other;
+
+          nearestDistance =
+            distance;
+        }
+      }
+
+
+      if (!nearest) {
+        return;
+      }
+
+
+      const connectSeed =
+        Math.abs(
+          Math.sin(
+            pool.x *
+              4.171 +
+            pool.y *
+              7.331
+          )
+        );
+
+
+      if (
+        connectSeed >
+        0.72
+      ) {
+        return;
+      }
+
+
+      const dx =
+        nearest.x -
+        pool.x;
+
+      const dy =
+        nearest.y -
+        pool.y;
+
+      const distance =
+        Math.max(
+          0.001,
+          Math.hypot(
+            dx,
+            dy
+          )
+        );
+
+      const perpendicularX =
+        -dy /
+        distance;
+
+      const perpendicularY =
+        dx /
+        distance;
+
+      const bend =
+        Math.sin(
+          pool.x *
+            8.13 +
+          nearest.y *
+            5.91
+        ) *
+        Math.min(
+          1.55,
+          distance *
+            0.18
+        );
+
+
+      channels.push({
+        id:
+          `swamp-channel-${pool.id}-${nearest.id}`,
+
+        x1:
+          pool.x,
+
+        y1:
+          pool.y,
+
+        x2:
+          nearest.x,
+
+        y2:
+          nearest.y,
+
+        control1X:
+          pool.x +
+          dx *
+            0.33 +
+          perpendicularX *
+            bend,
+
+        control1Y:
+          pool.y +
+          dy *
+            0.33 +
+          perpendicularY *
+            bend,
+
+        control2X:
+          pool.x +
+          dx *
+            0.68 -
+          perpendicularX *
+            bend *
+            0.72,
+
+        control2Y:
+          pool.y +
+          dy *
+            0.68 -
+          perpendicularY *
+            bend *
+            0.72,
+
+        width:
+          0.18 +
+          connectSeed *
+            0.12,
+      });
+    }
+  );
+
+
+  return {
+    pools,
+    channels,
+  };
 }
 
 
@@ -9010,7 +9537,17 @@ const landMaskId =
                 const patternId =
                   `sf-area-pattern-${safeKey}`;
 
+                
+
                 /*
+                 * DESERT TONAL SHADOW V1
+                 *
+                 * Separate tonal depth layer for dunes.
+                 * Existing dune artwork remains unchanged.
+                 */
+                const desertShadowFilterId =
+                  `sf-desert-shadow-${safeKey}`;
+/*
                  * Blur joins neighboring cells
                  * into one continuous biome.
                  *
@@ -9111,6 +9648,24 @@ const landMaskId =
                     }}
                   >
                     <defs>
+                      {/*
+                        DESERT TONAL SHADOW V1
+
+                        Blur only affects the sandy shadow,
+                        never the existing dune linework.
+                      */}
+                      <filter
+                        id={desertShadowFilterId}
+                        x="-45%"
+                        y="-70%"
+                        width="190%"
+                        height="240%"
+                      >
+                        <feGaussianBlur
+                          stdDeviation="0.24 0.13"
+                        />
+                      </filter>
+
                       <filter
                         id={filterId}
                         x="-5"
@@ -9770,7 +10325,130 @@ const landMaskId =
                         </mask>
 
 
-                      {symbol && (
+                      {group.terrainType === "snow" && (
+                          <>
+                            {/*
+                             * STORYFORGE SNOW ICE COAST V2
+                             *
+                             * Simpler than V1:
+                             *
+                             * 1. Start with the existing snow biome mask.
+                             * 2. Expand that shape outward.
+                             * 3. Only reveal the expansion outside the
+                             *    protected inland land mask.
+                             *
+                             * This creates:
+                             *
+                             * snow -> icy rim -> soft frozen shelf -> water
+                             *
+                             * without putting an icy border around inland
+                             * snow/biome boundaries.
+                             */}
+
+                            <mask
+                              id={`sf-snow-coastal-zone-${safeKey}`}
+                              maskUnits="userSpaceOnUse"
+                              x="0"
+                              y="0"
+                              width="100"
+                              height="100"
+                              style={{
+                                maskType: "luminance",
+                              }}
+                            >
+                              {/*
+                               * Everything starts visible...
+                               */}
+                              <rect
+                                x="0"
+                                y="0"
+                                width="100"
+                                height="100"
+                                fill="white"
+                              />
+
+                              {/*
+                               * ...then protected inland terrain is
+                               * removed. What remains is the exposed
+                               * coastline plus water.
+                               */}
+                              <g
+                                mask={`url(#${landMaskId})`}
+                              >
+                                <rect
+                                  x="0"
+                                  y="0"
+                                  width="100"
+                                  height="100"
+                                  fill="black"
+                                />
+                              </g>
+                            </mask>
+
+
+                            {/*
+                             * Wider, softer outer frozen shelf.
+                             */}
+                            <filter
+                              id={`sf-snow-ice-outer-${safeKey}`}
+                              x="-5"
+                              y="-8"
+                              width="110"
+                              height="116"
+                              filterUnits="userSpaceOnUse"
+                              colorInterpolationFilters="sRGB"
+                            >
+                              <feMorphology
+                                in="SourceGraphic"
+                                operator="dilate"
+                                radius={
+                                  `1.30 ${1.30 * canvasAspect}`
+                                }
+                                result="snowOuter"
+                              />
+
+                              <feGaussianBlur
+                                in="snowOuter"
+                                stdDeviation={
+                                  `0.30 ${0.30 * canvasAspect}`
+                                }
+                              />
+                            </filter>
+
+
+                            {/*
+                             * Tighter brighter rim nearest the coast.
+                             */}
+                            <filter
+                              id={`sf-snow-ice-inner-${safeKey}`}
+                              x="-5"
+                              y="-8"
+                              width="110"
+                              height="116"
+                              filterUnits="userSpaceOnUse"
+                              colorInterpolationFilters="sRGB"
+                            >
+                              <feMorphology
+                                in="SourceGraphic"
+                                operator="dilate"
+                                radius={
+                                  `0.72 ${0.72 * canvasAspect}`
+                                }
+                                result="snowInner"
+                              />
+
+                              <feGaussianBlur
+                                in="snowInner"
+                                stdDeviation={
+                                  `0.09 ${0.09 * canvasAspect}`
+                                }
+                              />
+                            </filter>
+                          </>
+                        )}
+
+
+                        {symbol && (
                         <pattern
                           id={patternId}
                           patternUnits="userSpaceOnUse"
@@ -9820,6 +10498,62 @@ const landMaskId =
                         </pattern>
                       )}
                     </defs>
+
+                      {group.terrainType === "snow" && (
+                        <g
+                          mask={
+                            `url(#sf-snow-coastal-zone-${safeKey})`
+                          }
+                          pointerEvents="none"
+                        >
+                          {/*
+                           * OUTER ICE FADE
+                           *
+                           * Slight blue-white tint extending into
+                           * open water. Strong enough to read, but
+                           * transparent enough to retain the water.
+                           */}
+                          <g
+                            filter={
+                              `url(#sf-snow-ice-outer-${safeKey})`
+                            }
+                            opacity="0.36"
+                          >
+                            <rect
+                              x="0"
+                              y="0"
+                              width="100"
+                              height="100"
+                              fill="#c7e7ed"
+                              mask={`url(#${maskId})`}
+                            />
+                          </g>
+
+
+                          {/*
+                           * INNER FROZEN RIM
+                           *
+                           * Almost white with just enough blue to
+                           * read as ice instead of an ordinary coast.
+                           */}
+                          <g
+                            filter={
+                              `url(#sf-snow-ice-inner-${safeKey})`
+                            }
+                            opacity="0.78"
+                          >
+                            <rect
+                              x="0"
+                              y="0"
+                              width="100"
+                              height="100"
+                              fill="#e8f7f8"
+                              mask={`url(#${maskId})`}
+                            />
+                          </g>
+                        </g>
+                      )}
+
 
                     <g
                         mask={`url(#${landMaskId})`}
@@ -9884,6 +10618,163 @@ const landMaskId =
                       )}
 
                       {/*
+                        STORYFORGE SWAMP HYDROLOGY V3
+
+                        Generated independently from reeds.
+                        Water is clipped inside the swamp
+                        biome and the actual land boundary.
+                      */}
+                      {group.terrainType ===
+                        "swamp" &&
+                        (() => {
+                          const wetland =
+                            buildStoryForgeSwampWaterFeatures(
+                              group.cells,
+                              group.columns,
+                              group.rows
+                            );
+
+                          return (
+                            <g
+                              mask={
+                                `url(#${landMaskId})`
+                              }
+                              pointerEvents="none"
+                            >
+                              <g
+                                mask={
+                                  `url(#${maskId})`
+                                }
+                              >
+                                {/*
+                                 * Draw channels first so they
+                                 * disappear naturally beneath
+                                 * the pools at each endpoint.
+                                 */}
+                                {wetland.channels.map(
+                                  (
+                                    channel
+                                  ) => (
+                                    <g
+                                      key={
+                                        channel.id
+                                      }
+                                    >
+                                      <path
+                                        d={
+                                          `M ${channel.x1} ${channel.y1} ` +
+                                          `C ${channel.control1X} ${channel.control1Y}, ` +
+                                          `${channel.control2X} ${channel.control2Y}, ` +
+                                          `${channel.x2} ${channel.y2}`
+                                        }
+                                        fill="none"
+                                        stroke="#75877a"
+                                        strokeWidth={
+                                          channel.width *
+                                          1.9
+                                        }
+                                        strokeLinecap="round"
+                                        opacity="0.72"
+                                      />
+
+                                      <path
+                                        d={
+                                          `M ${channel.x1} ${channel.y1} ` +
+                                          `C ${channel.control1X} ${channel.control1Y}, ` +
+                                          `${channel.control2X} ${channel.control2Y}, ` +
+                                          `${channel.x2} ${channel.y2}`
+                                        }
+                                        fill="none"
+                                        stroke="#405247"
+                                        strokeWidth={
+                                          channel.width *
+                                          0.28
+                                        }
+                                        strokeLinecap="round"
+                                        opacity="0.32"
+                                      />
+                                    </g>
+                                  )
+                                )}
+
+
+                                {wetland.pools.map(
+                                  (pool) => (
+                                    <g
+                                      key={
+                                        pool.id
+                                      }
+                                      transform={
+                                        `translate(${pool.x} ${pool.y}) ` +
+                                        `rotate(${pool.rotation}) ` +
+                                        `scale(${pool.rx} ${pool.ry})`
+                                      }
+                                    >
+                                      <path
+                                        d={
+                                          pool.variant ===
+                                          0
+                                            ? `
+                                              M-1 0
+                                              C-0.91 -0.63 -0.40 -0.95 0.03 -0.77
+                                              C0.39 -0.92 0.90 -0.58 0.94 -0.13
+                                              C1.08 0.30 0.62 0.82 0.18 0.73
+                                              C-0.19 0.93 -0.83 0.63 -0.96 0.21
+                                              C-1.02 0.13 -1.03 0.06 -1 0
+                                              Z
+                                            `
+                                            : pool.variant ===
+                                                1
+                                              ? `
+                                                M-1 0.04
+                                                C-0.82 -0.52 -0.43 -0.81 -0.08 -0.66
+                                                C0.23 -0.86 0.73 -0.68 0.90 -0.31
+                                                C1.12 -0.03 0.84 0.45 0.51 0.53
+                                                C0.20 0.85 -0.39 0.78 -0.61 0.52
+                                                C-0.91 0.49 -1.10 0.21 -1 0.04
+                                                Z
+                                              `
+                                              : `
+                                                M-1 -0.04
+                                                C-0.70 -0.69 -0.22 -0.82 0.15 -0.62
+                                                C0.52 -0.79 0.96 -0.42 0.91 -0.05
+                                                C1.06 0.34 0.58 0.72 0.20 0.65
+                                                C-0.15 0.87 -0.63 0.69 -0.78 0.42
+                                                C-1.02 0.35 -1.12 0.08 -1 -0.04
+                                                Z
+                                              `
+                                        }
+                                        fill="#75877a"
+                                        fillOpacity="0.80"
+                                        stroke="#405247"
+                                        strokeWidth="0.075"
+                                        vectorEffect="non-scaling-stroke"
+                                      />
+
+                                      <path
+                                        d="
+                                          M-0.57 0.06
+                                          C-0.30 -0.04 0.00 0.02 0.23 -0.04
+
+                                          M-0.25 0.35
+                                          C0.02 0.25 0.30 0.31 0.52 0.24
+                                        "
+                                        fill="none"
+                                        stroke="#34483d"
+                                        strokeWidth="0.052"
+                                        opacity="0.42"
+                                        vectorEffect="non-scaling-stroke"
+                                      />
+                                    </g>
+                                  )
+                                )}
+                              </g>
+                            </g>
+                          );
+                        })()}
+
+
+                      {/*
                         BIOME DIRECT WHOLE-SYMBOL LAYER
                       */}
                       {symbol &&
@@ -9905,32 +10796,1144 @@ const landMaskId =
                               (
                                 placement,
                                 index
-                              ) => (
-                                <text
+                              ) => {
+                                /*
+                                 * STORYFORGE SNOW ART V1
+                                 *
+                                 * Snow previously used a Unicode
+                                 * sparkle/triangle. It now uses the
+                                 * same hand-drawn cartographic
+                                 * language as StoryForge trees and
+                                 * peaks.
+                                 */
+                                if (
+                                  group.terrainType ===
+                                  "snow"
+                                ) {
+                                  const snowStyle =
+                                    group.style ??
+                                    "snowfield";
+
+                                  return (
+                                    <g
+                                      key={
+                                        `biome-direct-${groupKey}-${index}`
+                                      }
+                                      transform={
+                                        `translate(${placement.x} ${placement.y}) ` +
+                                        `rotate(${placement.rotation}) ` +
+                                        `scale(${placement.scale})`
+                                      }
+                                      fill="none"
+                                      stroke={
+                                        activeMap
+                                          .colors
+                                          .label
+                                      }
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      opacity="0.66"
+                                    >
+                                      {/*
+                                         * STORYFORGE SNOW TONAL SHADOW V2
+                                         *
+                                         * A cooler version of the desert
+                                         * tonal-depth treatment.
+                                         *
+                                         * Stronger than V1 so it actually
+                                         * reads against the pale snow,
+                                         * while remaining soft enough not
+                                         * to look like another ink line.
+                                         */}
+                                        <path
+                                          d="
+                                            M-1.55 0.45
+                                            C-1.18 0.34 -0.95 0.10 -0.66 -0.12
+                                            C-0.39 -0.32 -0.13 -0.38 0.11 -0.25
+                                            C0.36 -0.12 0.51 0.13 0.78 0.27
+                                            C1.03 0.40 1.30 0.41 1.54 0.47
+                                            C1.13 0.62 0.62 0.70 0.07 0.71
+                                            C-0.49 0.72 -1.06 0.63 -1.55 0.45
+                                            Z
+                                          "
+                                          fill="#718e98"
+                                          stroke="none"
+                                          opacity="0.18"
+                                        />
+
+                                        {snowStyle ===
+                                      "ice" ? (
+                                        <>
+                                          {/*
+                                           * Broken ice plate with
+                                           * irregular fracture lines.
+                                           */}
+                                          <path
+                                            d="
+                                              M-1.34 0.15
+                                              L-0.80 -0.66
+                                              L0.03 -0.82
+                                              L0.83 -0.49
+                                              L1.34 0.18
+                                              L0.72 0.74
+                                              L-0.24 0.82
+                                              L-1.05 0.56
+                                              Z
+                                            "
+                                            strokeWidth="0.16"
+                                          />
+
+                                          <path
+                                            d="
+                                              M0.03 -0.82
+                                              L-0.13 -0.12
+                                              L0.25 0.18
+
+                                              M-0.13 -0.12
+                                              L-0.72 0.20
+
+                                              M0.25 0.18
+                                              L0.72 -0.12
+
+                                              M0.25 0.18
+                                              L0.08 0.69
+                                            "
+                                            strokeWidth="0.13"
+                                            opacity="0.72"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-1.18 1.03
+                                              C-0.57 0.88 -0.04 0.99 0.38 0.91
+                                              C0.76 0.84 1.04 0.93 1.27 1.00
+                                            "
+                                            strokeWidth="0.11"
+                                            opacity="0.28"
+                                          />
+                                        </>
+                                      ) : snowStyle ===
+                                        "snow-peaks" ? (
+                                        <>
+                                          {/*
+                                           * Small snowy ridge for the
+                                           * Snow biome—not the main
+                                           * Mountain feature renderer.
+                                           */}
+                                          <path
+                                            d="
+                                              M-1.45 0.76
+                                              L-0.72 0.27
+                                              L-0.20 -0.48
+                                              L0.15 0.02
+                                              L0.58 -0.78
+                                              L1.43 0.76
+                                            "
+                                            strokeWidth="0.17"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-0.20 -0.48
+                                              L-0.42 -0.10
+                                              L-0.12 -0.22
+                                              L0.15 0.02
+
+                                              M0.58 -0.78
+                                              L0.30 -0.27
+                                              L0.58 -0.40
+                                              L0.83 -0.20
+                                            "
+                                            strokeWidth="0.13"
+                                            opacity="0.70"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-1.27 0.92
+                                              C-0.66 0.74 -0.18 0.91 0.20 0.79
+                                              C0.61 0.67 1.03 0.79 1.31 0.91
+                                            "
+                                            strokeWidth="0.11"
+                                            opacity="0.30"
+                                          />
+                                        </>
+                                      ) : (
+                                        <>
+                                          {/*
+                                           * Default Snowfield.
+                                           *
+                                           * Uneven layered drifts and
+                                           * tiny wind/snow marks make
+                                           * the symbol feel sketched
+                                           * onto the map rather than
+                                           * stamped on top of it.
+                                           */}
+                                          <path
+                                            d="
+                                              M-1.46 0.18
+                                              C-1.02 -0.12 -0.59 -0.16 -0.23 0.01
+                                              C0.13 0.19 0.45 -0.24 0.84 -0.16
+                                              C1.09 -0.11 1.27 0.02 1.45 0.12
+                                            "
+                                            strokeWidth="0.16"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-1.18 0.59
+                                              C-0.76 0.39 -0.38 0.52 -0.05 0.39
+                                              C0.27 0.26 0.53 0.38 0.77 0.34
+                                              C1.00 0.30 1.16 0.20 1.34 0.29
+                                            "
+                                            strokeWidth="0.13"
+                                            opacity="0.72"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-0.93 0.91
+                                              C-0.51 0.76 -0.09 0.87 0.24 0.77
+                                              C0.58 0.67 0.88 0.76 1.11 0.84
+                                            "
+                                            strokeWidth="0.10"
+                                            opacity="0.38"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-0.84 -0.55
+                                              L-0.68 -0.72
+
+                                              M0.02 -0.62
+                                              L0.12 -0.82
+
+                                              M0.79 -0.48
+                                              L0.98 -0.63
+                                            "
+                                            strokeWidth="0.11"
+                                            opacity="0.48"
+                                          />
+                                        </>
+                                      )}
+                                    </g>
+                                  );
+                                }
+
+                                /*
+                                 * STORYFORGE PLAINS ART V1
+                                 *
+                                 * Grass is drawn as irregular
+                                 * hand-inked tufts instead of a
+                                 * repeating Unicode mark.
+                                 */
+                                if (
+                                  group.terrainType ===
+                                  "plains"
+                                ) {
+                                  const plainsStyle =
+                                    group.style ??
+                                    "grass";
+
+                                  return (
+                                    <g
+                                      key={
+                                        `biome-direct-${groupKey}-${index}`
+                                      }
+                                      transform={
+                                        `translate(${placement.x} ${placement.y}) ` +
+                                        `rotate(${placement.rotation}) ` +
+                                        `scale(${placement.scale * 0.60})`
+                                      }
+                                      fill="none"
+                                      stroke={
+                                        activeMap
+                                          .colors
+                                          .label
+                                      }
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      opacity="0.64"
+                                    >
+                                      {plainsStyle ===
+                                      "hatch" ? (
+                                        <>
+                                          <path
+                                            d="
+                                              M-1.32 0.68
+                                              L-0.91 -0.05
+
+                                              M-0.73 0.74
+                                              L-0.28 -0.16
+
+                                              M-0.10 0.68
+                                              L0.30 -0.08
+
+                                              M0.50 0.71
+                                              L0.91 -0.02
+
+                                              M1.02 0.67
+                                              L1.28 0.20
+                                            "
+                                            strokeWidth="0.12"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-1.43 0.83
+                                              C-0.87 0.72 -0.35 0.82 0.08 0.74
+                                              C0.52 0.66 0.95 0.75 1.38 0.82
+                                            "
+                                            strokeWidth="0.10"
+                                            opacity="0.30"
+                                          />
+                                        </>
+                                      ) : plainsStyle ===
+                                        "sparse" ? (
+                                        <>
+                                          <path
+                                            d="
+                                              M-0.48 0.72
+                                              C-0.45 0.15 -0.39 -0.22 -0.25 -0.59
+
+                                              M-0.45 0.30
+                                              L-0.82 -0.03
+
+                                              M-0.39 0.13
+                                              L-0.08 -0.20
+
+                                              M0.36 0.70
+                                              C0.37 0.28 0.42 0.01 0.52 -0.27
+
+                                              M0.39 0.31
+                                              L0.15 0.08
+                                            "
+                                            strokeWidth="0.14"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-0.93 0.84
+                                              C-0.48 0.74 -0.11 0.82 0.18 0.77
+                                              C0.49 0.72 0.72 0.77 0.96 0.82
+                                            "
+                                            strokeWidth="0.10"
+                                            opacity="0.28"
+                                          />
+                                        </>
+                                      ) : (
+                                        <>
+                                          <path
+                                            d="
+                                              M-0.92 0.76
+                                              C-0.90 0.18 -0.82 -0.28 -0.57 -0.72
+
+                                              M-0.87 0.33
+                                              L-1.22 -0.06
+
+                                              M-0.81 0.12
+                                              L-0.45 -0.27
+
+                                              M-0.24 0.78
+                                              C-0.25 0.10 -0.13 -0.39 0.04 -0.84
+
+                                              M-0.20 0.30
+                                              L-0.57 -0.12
+
+                                              M-0.14 0.08
+                                              L0.23 -0.34
+
+                                              M0.50 0.76
+                                              C0.54 0.22 0.61 -0.16 0.81 -0.56
+
+                                              M0.55 0.32
+                                              L0.31 -0.02
+
+                                              M0.63 0.12
+                                              L0.98 -0.18
+                                            "
+                                            strokeWidth="0.14"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-1.24 0.88
+                                              C-0.73 0.73 -0.28 0.87 0.06 0.77
+                                              C0.49 0.65 0.91 0.77 1.28 0.86
+
+                                              M-0.79 1.06
+                                              C-0.33 0.95 0.14 1.01 0.55 0.96
+                                            "
+                                            strokeWidth="0.10"
+                                            opacity="0.30"
+                                          />
+                                        </>
+                                      )}
+                                    </g>
+                                  );
+                                }
+
+
+                                /*
+                                 * STORYFORGE DESERT ART V2
+                                 *
+                                 * Desert placement still uses the
+                                 * reliable shared biome engine.
+                                 *
+                                 * Each placement now represents a
+                                 * broad FAMILY of overlapping dune
+                                 * ridges instead of one small symbol.
+                                 */
+                                if (
+                                  group.terrainType ===
+                                  "desert"
+                                ) {
+                                  const desertStyle =
+                                    group.style ??
+                                    "dunes";
+
+                                  /*
+                                   * Nearby dunes retain roughly the
+                                   * same prevailing direction while
+                                   * still getting small variation.
+                                   */
+                                  const duneVariant =
+                                    index % 5;
+
+                                  const duneStretch =
+                                    1.48 +
+                                    (
+                                      index % 3
+                                    ) *
+                                      0.10;
+
+                                  const duneHeight =
+                                    0.69 +
+                                    (
+                                      index % 4
+                                    ) *
+                                      0.035;
+
+                                  const duneRotation =
+                                    placement.rotation *
+                                    0.42;
+
+                                  return (
+                                    <g
+                                      key={
+                                        `biome-direct-${groupKey}-${index}`
+                                      }
+                                      mask={
+                                        `url(#${landMaskId})`
+                                      }
+                                    >
+                                      <g
+                                        mask={
+                                          `url(#${maskId})`
+                                        }
+                                      >
+                                        <g
+                                          transform={
+                                            `translate(${placement.x} ${placement.y}) ` +
+                                            `rotate(${duneRotation}) ` +
+                                            `scale(${placement.scale * duneStretch} ${placement.scale * duneHeight})`
+                                          }
+                                          fill="none"
+                                          stroke={
+                                            activeMap
+                                              .colors
+                                              .label
+                                          }
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          opacity="0.70"
+                                        >
+                                          {desertStyle ===
+                                          "sand-marks" ? (
+                                            <>
+                                              <path
+                                                d="
+                                                  M-1.52 -0.32
+                                                  C-1.08 -0.53 -0.62 -0.48 -0.28 -0.34
+                                                  C0.10 -0.18 0.45 -0.29 0.79 -0.21
+                                                  C1.08 -0.14 1.31 -0.18 1.50 -0.11
+
+                                                  M-1.26 0.13
+                                                  C-0.82 -0.07 -0.38 -0.01 -0.04 0.12
+                                                  C0.36 0.25 0.65 0.16 0.97 0.23
+
+                                                  M-0.86 0.56
+                                                  C-0.48 0.41 -0.08 0.43 0.29 0.55
+                                                  C0.58 0.64 0.84 0.60 1.06 0.56
+                                                "
+                                                strokeWidth="0.10"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
+
+                                              <path
+                                                d="
+                                                  M-0.46 -0.69
+                                                  C-0.17 -0.80 0.11 -0.77 0.34 -0.68
+
+                                                  M0.72 -0.49
+                                                  C0.99 -0.59 1.22 -0.55 1.40 -0.47
+                                                "
+                                                strokeWidth="0.075"
+                                                opacity="0.42"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
+                                            </>
+                                          ) : desertStyle ===
+                                            "barren" ? (
+                                            <>
+                                              <path
+                                                d="
+                                                  M-1.42 0.33
+                                                  L-0.91 0.15
+                                                  L-0.55 0.31
+                                                  L-0.13 0.08
+                                                  L0.26 0.22
+                                                  L0.69 0.02
+                                                  L1.39 0.19
+
+                                                  M-0.55 0.31
+                                                  L-0.72 0.72
+
+                                                  M-0.13 0.08
+                                                  L-0.02 -0.43
+
+                                                  M0.26 0.22
+                                                  L0.42 0.64
+
+                                                  M0.69 0.02
+                                                  L0.72 -0.35
+                                                "
+                                                strokeWidth="0.11"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
+
+                                              <path
+                                                d="
+                                                  M-1.09 -0.43
+                                                  C-0.70 -0.57 -0.32 -0.53 0.01 -0.42
+
+                                                  M0.47 -0.53
+                                                  C0.78 -0.63 1.08 -0.58 1.31 -0.48
+                                                "
+                                                strokeWidth="0.075"
+                                                opacity="0.36"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
+                                            </>
+                                          ) : (
+                                            <>
+                                              {/*
+                                               * STORYFORGE DESERT TONAL SHADOW V4
+                                               *
+                                               * Soft tonal shadow beneath the dune
+                                               * family. The main ink remains clean
+                                               * while the sand gains gentle depth.
+                                               */}
+                                              <path
+                                                d="
+                                                  M-1.52 0.46
+                                                  C-1.16 0.34 -0.91 0.04 -0.61 -0.15
+                                                  C-0.34 -0.33 -0.09 -0.37 0.14 -0.23
+                                                  C0.37 -0.09 0.52 0.15 0.78 0.27
+                                                  C1.01 0.37 1.27 0.39 1.51 0.47
+                                                  C1.08 0.61 0.58 0.68 0.05 0.69
+                                                  C-0.51 0.70 -1.05 0.62 -1.52 0.46
+                                                  Z
+                                                "
+                                                fill={
+                                                  activeMap
+                                                    .colors
+                                                    .label
+                                                }
+                                                stroke="none"
+                                                opacity="0.085"
+                                              />
+
+                                              {/*
+                                               * BACK DUNE
+                                               *
+                                               * A shallower ridge sitting
+                                               * behind the main formation.
+                                               */}
+                                              <path
+                                                d={
+                                                  duneVariant ===
+                                                  0
+                                                    ? `
+                                                      M-1.62 -0.03
+                                                      C-1.23 -0.10 -1.01 -0.47 -0.66 -0.55
+                                                      C-0.32 -0.63 -0.10 -0.40 0.10 -0.27
+                                                      C0.36 -0.09 0.58 -0.34 0.86 -0.31
+                                                      C1.12 -0.28 1.30 -0.05 1.57 0.00
+                                                    `
+                                                    : duneVariant ===
+                                                        1
+                                                      ? `
+                                                        M-1.60 0.02
+                                                        C-1.24 -0.12 -1.05 -0.39 -0.73 -0.48
+                                                        C-0.36 -0.58 -0.12 -0.31 0.08 -0.18
+                                                        C0.34 0.00 0.55 -0.27 0.85 -0.34
+                                                        C1.13 -0.39 1.34 -0.10 1.61 -0.03
+                                                      `
+                                                      : `
+                                                        M-1.61 -0.01
+                                                        C-1.27 -0.09 -1.03 -0.42 -0.70 -0.51
+                                                        C-0.42 -0.59 -0.19 -0.43 0.02 -0.24
+                                                        C0.28 0.00 0.52 -0.22 0.80 -0.29
+                                                        C1.09 -0.36 1.31 -0.09 1.59 0.01
+                                                      `
+                                                }
+                                                strokeWidth="0.11"
+                                                opacity="0.38"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
+
+
+                                              {/*
+                                               * MAIN DUNE CREST
+                                               *
+                                               * This is intentionally
+                                               * asymmetric and wider than
+                                               * the original dune icon.
+                                               */}
+                                              <path
+                                                d={
+                                                  duneVariant ===
+                                                  0
+                                                    ? `
+                                                      M-1.72 0.38
+                                                      C-1.34 0.31 -1.09 0.08 -0.84 -0.20
+                                                      C-0.60 -0.47 -0.33 -0.69 -0.06 -0.60
+                                                      C0.19 -0.52 0.32 -0.20 0.50 -0.03
+                                                      C0.73 0.20 0.97 0.30 1.22 0.28
+                                                      C1.40 0.27 1.56 0.32 1.73 0.38
+                                                    `
+                                                    : duneVariant ===
+                                                        1
+                                                      ? `
+                                                        M-1.71 0.40
+                                                        C-1.33 0.33 -1.09 0.15 -0.82 -0.10
+                                                        C-0.52 -0.38 -0.25 -0.58 0.01 -0.52
+                                                        C0.29 -0.45 0.43 -0.10 0.62 0.07
+                                                        C0.86 0.28 1.11 0.32 1.35 0.30
+                                                        C1.49 0.30 1.61 0.34 1.72 0.40
+                                                      `
+                                                      : duneVariant ===
+                                                          2
+                                                        ? `
+                                                          M-1.73 0.41
+                                                          C-1.39 0.32 -1.16 0.09 -0.91 -0.17
+                                                          C-0.68 -0.42 -0.45 -0.62 -0.19 -0.59
+                                                          C0.03 -0.57 0.16 -0.31 0.31 -0.12
+                                                          C0.48 0.09 0.69 0.25 0.91 0.26
+                                                          C1.20 0.28 1.44 0.28 1.73 0.41
+                                                        `
+                                                        : `
+                                                          M-1.71 0.39
+                                                          C-1.31 0.30 -1.10 0.02 -0.79 -0.24
+                                                          C-0.51 -0.48 -0.23 -0.66 0.04 -0.54
+                                                          C0.27 -0.44 0.38 -0.18 0.57 0.01
+                                                          C0.78 0.23 1.04 0.34 1.28 0.29
+                                                          C1.46 0.27 1.59 0.32 1.71 0.39
+                                                        `
+                                                }
+                                                strokeWidth="0.14"
+                                                opacity="0.77"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
+
+
+                                              {/*
+                                               * FOREGROUND RIDGE
+                                               *
+                                               * Gives the dune family a
+                                               * second overlapping hill,
+                                               * instead of one isolated arc.
+                                               */}
+                                              <path
+                                                d={
+                                                  duneVariant % 2 ===
+                                                  0
+                                                    ? `
+                                                      M-1.47 0.68
+                                                      C-1.12 0.59 -0.91 0.37 -0.66 0.21
+                                                      C-0.42 0.05 -0.21 0.09 -0.04 0.22
+                                                      C0.17 0.39 0.35 0.52 0.58 0.50
+                                                      C0.86 0.47 1.08 0.54 1.40 0.65
+                                                    `
+                                                    : `
+                                                      M-1.40 0.66
+                                                      C-1.09 0.58 -0.82 0.40 -0.60 0.24
+                                                      C-0.37 0.07 -0.13 0.10 0.06 0.27
+                                                      C0.25 0.45 0.44 0.53 0.65 0.48
+                                                      C0.90 0.43 1.14 0.54 1.45 0.65
+                                                    `
+                                                }
+                                                strokeWidth="0.105"
+                                                opacity="0.50"
+                                                vectorEffect="non-scaling-stroke"
+                                              />
+
+
+                                              {/*
+                                               * Partial inner contour.
+                                               * Not every formation gets
+                                               * one, which breaks repetition.
+                                               */}
+                                              {duneVariant ===
+                                                0 && (
+                                                <path
+                                                  d="
+                                                    M-0.74 0.07
+                                                    C-0.52 -0.17 -0.29 -0.35 -0.08 -0.32
+                                                    C0.13 -0.29 0.24 -0.08 0.39 0.04
+                                                  "
+                                                  strokeWidth="0.075"
+                                                  opacity="0.30"
+                                                  vectorEffect="non-scaling-stroke"
+                                                />
+                                              )}
+
+
+                                              {/*
+                                               * Light ground contour keeps
+                                               * the dune connected visually
+                                               * to the desert rather than
+                                               * floating above it.
+                                               */}
+                                              {duneVariant ===
+                                                0 &&
+                                                index % 3 ===
+                                                  0 && (
+                                                <path
+                                                  d="
+                                                    M-0.92 0.88
+                                                    C-0.53 0.76 -0.13 0.80 0.21 0.74
+                                                    C0.51 0.69 0.81 0.74 1.08 0.82
+                                                  "
+                                                  strokeWidth="0.065"
+                                                  opacity="0.20"
+                                                  vectorEffect="non-scaling-stroke"
+                                                />
+                                              )}
+                                            </>
+                                          )}
+                                        </g>
+                                      </g>
+                                    </g>
+                                  );
+                                }
+
+
+                                /*
+                                 * STORYFORGE SWAMP ART V1
+                                 *
+                                 * Marsh artwork uses reeds,
+                                 * water lines, and dead wood
+                                 * rather than typographic marks.
+                                 */
+                                if (
+                                  group.terrainType ===
+                                  "swamp"
+                                ) {
+                                  const swampStyle =
+                                    group.style ??
+                                    "reeds";
+
+                                  /*
+                                   * SWAMP HYDROLOGY V1
+                                   *
+                                   * Stable variant selection means
+                                   * pools/channels remain in exactly
+                                   * the same place after rerenders
+                                   * and reloads.
+                                   */
+                                  const swampWaterVariant =
+                                    index % 5;
+
+                                  return (
+                                    <g
+                                      key={
+                                        `biome-direct-${groupKey}-${index}`
+                                      }
+                                      transform={
+                                        `translate(${placement.x} ${placement.y}) ` +
+                                        `rotate(${placement.rotation}) ` +
+                                        `scale(${placement.scale * 0.64})`
+                                      }
+                                      fill="none"
+                                      stroke={
+                                        activeMap
+                                          .colors
+                                          .label
+                                      }
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      opacity="0.66"
+                                    >
+                                      {/*
+                                       * Small murky pools and wet
+                                       * channels are part of the
+                                       * swamp itself.
+                                       *
+                                       * They deliberately do NOT use
+                                       * the normal map-water blue.
+                                       */}
+                                      {swampWaterVariant ===
+                                        0 && (
+                                        <>
+                                          <path
+                                            d="
+                                              M-1.22 0.24
+                                              C-0.92 -0.05 -0.51 -0.12 -0.18 0.00
+                                              C0.14 0.12 0.40 -0.04 0.70 0.01
+                                              C1.03 0.07 1.20 0.29 1.02 0.47
+                                              C0.76 0.72 0.25 0.66 -0.07 0.58
+                                              C-0.47 0.49 -0.90 0.67 -1.18 0.45
+                                              C-1.30 0.36 -1.29 0.30 -1.22 0.24
+                                              Z
+                                            "
+                                            fill="#68705a"
+                                            fillOpacity="0.46"
+                                            stroke="#4e5b4d"
+                                            strokeWidth="0.08"
+                                            opacity="0.82"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-0.91 0.31
+                                              C-0.51 0.19 -0.17 0.32 0.13 0.25
+                                              C0.40 0.19 0.66 0.25 0.86 0.34
+                                            "
+                                            stroke="#4e5b4d"
+                                            strokeWidth="0.07"
+                                            opacity="0.38"
+                                          />
+                                        </>
+                                      )}
+
+                                      {swampWaterVariant ===
+                                        1 && (
+                                        <>
+                                          {/*
+                                           * Narrow winding swamp
+                                           * channel rather than a
+                                           * full normal river.
+                                           */}
+                                          <path
+                                            d="
+                                              M-1.34 -0.25
+                                              C-0.94 -0.47 -0.66 -0.02 -0.30 0.00
+                                              C0.06 0.02 0.20 -0.27 0.53 -0.20
+                                              C0.82 -0.14 0.94 0.16 1.30 0.03
+                                            "
+                                            stroke="#68705a"
+                                            strokeWidth="0.30"
+                                            opacity="0.58"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-1.34 -0.25
+                                              C-0.94 -0.47 -0.66 -0.02 -0.30 0.00
+                                              C0.06 0.02 0.20 -0.27 0.53 -0.20
+                                              C0.82 -0.14 0.94 0.16 1.30 0.03
+                                            "
+                                            stroke="#4e5b4d"
+                                            strokeWidth="0.055"
+                                            opacity="0.36"
+                                          />
+                                        </>
+                                      )}
+
+                                      {swampWaterVariant ===
+                                        2 && (
+                                        <>
+                                          <ellipse
+                                            cx="-0.55"
+                                            cy="0.30"
+                                            rx="0.68"
+                                            ry="0.28"
+                                            fill="#68705a"
+                                            fillOpacity="0.43"
+                                            stroke="#4e5b4d"
+                                            strokeWidth="0.07"
+                                          />
+
+                                          <ellipse
+                                            cx="0.67"
+                                            cy="-0.05"
+                                            rx="0.43"
+                                            ry="0.20"
+                                            fill="#68705a"
+                                            fillOpacity="0.34"
+                                            stroke="#4e5b4d"
+                                            strokeWidth="0.06"
+                                          />
+
+                                          <path
+                                            d="
+                                              M0.22 0.15
+                                              C0.34 0.06 0.43 0.00 0.55 -0.02
+                                            "
+                                            stroke="#68705a"
+                                            strokeWidth="0.16"
+                                            opacity="0.48"
+                                          />
+                                        </>
+                                      )}
+
+                                      {swampWaterVariant ===
+                                        3 && (
+                                        <>
+                                          <path
+                                            d="
+                                              M-0.92 0.41
+                                              C-0.63 0.18 -0.23 0.16 0.03 0.27
+                                              C0.31 0.38 0.47 0.59 0.23 0.72
+                                              C-0.11 0.90 -0.65 0.76 -0.91 0.57
+                                              C-1.00 0.50 -0.99 0.46 -0.92 0.41
+                                              Z
+                                            "
+                                            fill="#68705a"
+                                            fillOpacity="0.41"
+                                            stroke="#4e5b4d"
+                                            strokeWidth="0.07"
+                                          />
+
+                                          <path
+                                            d="
+                                              M0.15 0.34
+                                              C0.51 0.20 0.65 -0.05 0.87 -0.18
+                                              C1.02 -0.27 1.14 -0.25 1.28 -0.19
+                                            "
+                                            stroke="#68705a"
+                                            strokeWidth="0.23"
+                                            opacity="0.52"
+                                          />
+                                        </>
+                                      )}
+
+                                      {/*
+                                       * Variant 4 deliberately has
+                                       * no visible water. Natural
+                                       * swamps need occasional drier
+                                       * clumps and islands.
+                                       */}
+
+                                      {swampStyle ===
+                                      "dead-trees" ? (
+                                        <>
+                                          <path
+                                            d="
+                                              M0.02 0.77
+                                              C-0.02 0.25 0.02 -0.20 -0.08 -0.72
+
+                                              M-0.05 -0.25
+                                              L-0.61 -0.58
+
+                                              M-0.31 -0.43
+                                              L-0.50 -0.80
+
+                                              M-0.01 -0.03
+                                              L0.53 -0.43
+
+                                              M0.28 -0.25
+                                              L0.52 -0.72
+                                            "
+                                            strokeWidth="0.17"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-1.26 0.78
+                                              C-0.86 0.67 -0.53 0.75 -0.25 0.71
+                                              C0.11 0.65 0.39 0.71 0.67 0.68
+                                              C0.92 0.65 1.11 0.68 1.29 0.74
+
+                                              M-0.98 1.02
+                                              C-0.54 0.92 -0.14 1.00 0.20 0.94
+                                              C0.53 0.88 0.85 0.93 1.11 0.99
+                                            "
+                                            strokeWidth="0.10"
+                                            opacity="0.40"
+                                          />
+                                        </>
+                                      ) : swampStyle ===
+                                        "marsh" ? (
+                                        <>
+                                          <path
+                                            d="
+                                              M-1.36 0.26
+                                              C-0.93 0.13 -0.54 0.20 -0.22 0.15
+                                              C0.12 0.09 0.42 0.16 0.72 0.13
+                                              C0.97 0.10 1.16 0.15 1.35 0.21
+
+                                              M-1.17 0.67
+                                              C-0.73 0.54 -0.36 0.63 -0.04 0.56
+                                              C0.30 0.49 0.62 0.57 0.92 0.53
+                                              C1.07 0.51 1.20 0.54 1.31 0.58
+                                            "
+                                            strokeWidth="0.11"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-0.76 0.17
+                                              C-0.72 -0.17 -0.67 -0.41 -0.54 -0.67
+
+                                              M-0.69 -0.18
+                                              L-0.91 -0.43
+
+                                              M0.20 0.12
+                                              C0.22 -0.20 0.27 -0.45 0.39 -0.70
+
+                                              M0.26 -0.21
+                                              L0.52 -0.43
+
+                                              M0.83 0.17
+                                              C0.85 -0.05 0.89 -0.24 0.98 -0.43
+                                            "
+                                            strokeWidth="0.13"
+                                          />
+                                        </>
+                                      ) : (
+                                        <>
+                                          <path
+                                            d="
+                                              M-0.94 0.61
+                                              C-0.94 0.07 -0.88 -0.36 -0.73 -0.79
+
+                                              M-0.89 0.08
+                                              L-1.18 -0.24
+
+                                              M-0.39 0.65
+                                              C-0.40 0.11 -0.32 -0.34 -0.15 -0.69
+
+                                              M-0.34 0.13
+                                              L-0.63 -0.18
+
+                                              M0.28 0.63
+                                              C0.29 0.05 0.36 -0.38 0.53 -0.77
+
+                                              M0.34 0.10
+                                              L0.66 -0.22
+
+                                              M0.87 0.61
+                                              C0.90 0.20 0.95 -0.12 1.09 -0.42
+                                            "
+                                            strokeWidth="0.14"
+                                          />
+
+                                          <path
+                                            d="
+                                              M-1.35 0.77
+                                              C-0.91 0.66 -0.55 0.75 -0.24 0.69
+                                              C0.09 0.63 0.41 0.70 0.70 0.66
+                                              C0.96 0.63 1.16 0.67 1.34 0.72
+
+                                              M-0.98 1.00
+                                              C-0.59 0.91 -0.20 0.97 0.10 0.93
+                                              C0.42 0.89 0.73 0.92 1.02 0.97
+                                            "
+                                            strokeWidth="0.10"
+                                            opacity="0.38"
+                                          />
+                                        </>
+                                      )}
+                                    </g>
+                                  );
+                                }
+
+
+                                return (
+                                  
+                                <g
                                   key={
-                                    `biome-direct-${groupKey}-${index}`
-                                  }
-                                  x={placement.x}
-                                  y={placement.y}
-                                  fontSize={
-                                    2.35 *
-                                    placement.scale
-                                  }
-                                  opacity="0.68"
-                                  fill={
-                                    activeMap
-                                      .colors
-                                      .label
-                                  }
-                                  textAnchor="middle"
-                                  dominantBaseline="central"
-                                  transform={
-                                    `rotate(${placement.rotation} ${placement.x} ${placement.y})`
+                                    `biome-depth-${groupKey}-${index}`
                                   }
                                 >
-                                  {symbol}
-                                </text>
-                              )
+                                  {/*
+                                    DESERT TONAL SHADOW V1
+
+                                    This is not a second dune
+                                    outline. It is a shallow,
+                                    faded patch of the desert's
+                                    own color, multiplied into
+                                    the biome underneath.
+
+                                    That creates depth without
+                                    increasing line contrast.
+                                  */}
+                                  {group.terrainType ===
+                                    "desert" &&
+                                    group.style ===
+                                      "dunes" && (
+                                      <ellipse
+                                        cx={
+                                          placement.x +
+                                          0.10
+                                        }
+                                        cy={
+                                          placement.y +
+                                          0.32
+                                        }
+                                        rx={
+                                          1.10 *
+                                          placement.scale
+                                        }
+                                        ry={
+                                          0.31 *
+                                          placement.scale
+                                        }
+                                        fill={fill}
+                                        opacity="0.22"
+                                        filter={
+                                          `url(#${desertShadowFilterId})`
+                                        }
+                                        style={{
+                                          mixBlendMode:
+                                            "multiply",
+                                        }}
+                                        transform={
+                                          `rotate(${placement.rotation} ${placement.x + 0.10} ${placement.y + 0.32})`
+                                        }
+                                      />
+                                    )}
+
+<text
+                                    key={
+                                      `biome-direct-${groupKey}-${index}`
+                                    }
+                                    x={placement.x}
+                                    y={placement.y}
+                                    fontSize={
+                                      2.35 *
+                                      placement.scale
+                                    }
+                                    opacity="0.68"
+                                    fill={
+                                      activeMap
+                                        .colors
+                                        .label
+                                    }
+                                    textAnchor="middle"
+                                    dominantBaseline="central"
+                                    transform={
+                                      `rotate(${placement.rotation} ${placement.x} ${placement.y})`
+                                    }
+                                  >
+                                    {symbol}
+                                  </text>
+                                </g>
+                                );
+                              }
                             )}
                           </g>
                         )}
