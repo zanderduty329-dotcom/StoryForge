@@ -4016,6 +4016,132 @@ function mapPathTouchesArea(
 }
 
 
+/*
+ * STORYFORGE PATH JOIN SNAP V1
+ *
+ * A newly completed path may snap either
+ * endpoint onto an existing compatible path.
+ *
+ * Rivers join rivers.
+ * Roads join roads of the same material.
+ */
+
+type MapPathJoinPoint = {
+  x: number;
+  y: number;
+  pathId: string;
+  distance: number;
+};
+
+function pathsCanJoin(
+  candidate: MapPath,
+  kind: MapPathKind,
+  roadStyle?: RoadStyle
+) {
+  if (
+    candidate.kind !== kind
+  ) {
+    return false;
+  }
+
+  if (
+    kind === "road" &&
+    candidate.roadStyle !==
+      roadStyle
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function pathJoinSnapRadius(
+  kind: MapPathKind,
+  width: number
+) {
+  return kind === "river"
+    ? Math.max(
+        0.85,
+        width * 0.90
+      )
+    : Math.max(
+        0.55,
+        width * 1.10 +
+          0.15
+      );
+}
+
+function nearestCompatiblePathPoint(
+  paths: MapPath[],
+  kind: MapPathKind,
+  roadStyle: RoadStyle | undefined,
+  point: {
+    x: number;
+    y: number;
+  },
+  maxDistance: number,
+  excludePathId?: string
+): MapPathJoinPoint | null {
+  let best:
+    MapPathJoinPoint | null =
+    null;
+
+  for (
+    const candidate of paths
+  ) {
+    if (
+      candidate.id ===
+        excludePathId ||
+      candidate.points.length <
+        2 ||
+      !pathsCanJoin(
+        candidate,
+        kind,
+        roadStyle
+      )
+    ) {
+      continue;
+    }
+
+    for (
+      const sample of
+      sampleMapPath(candidate)
+    ) {
+      const distance =
+        Math.hypot(
+          sample.x -
+            point.x,
+          sample.y -
+            point.y
+        );
+
+      if (
+        distance >
+        maxDistance
+      ) {
+        continue;
+      }
+
+      if (
+        !best ||
+        distance <
+          best.distance
+      ) {
+        best = {
+          x: sample.x,
+          y: sample.y,
+          pathId:
+            candidate.id,
+          distance,
+        };
+      }
+    }
+  }
+
+  return best;
+}
+
+
 export function MapPage({
   worldId,
 }: {
@@ -7804,15 +7930,100 @@ export function MapPage({
             })
           );
 
-    const finishedPath: MapPath = {
-      ...pathDraft,
+    /*
+       * STORYFORGE PATH JOIN FINISH V1
+       *
+       * Preserve the completed route, then allow
+       * only its endpoints to snap to existing
+       * compatible geometry.
+       */
+      const joinRadius =
+        pathJoinSnapRadius(
+          pathDraft.kind,
+          pathWidth
+        );
 
-      width:
-        pathWidth,
+      const joinedPoints =
+        finishedPoints.map(
+          (point) => ({
+            ...point,
+          })
+        );
 
-      points:
-        finishedPoints,
-    };
+      const firstPoint =
+        joinedPoints[0];
+
+      const lastPoint =
+        joinedPoints[
+          joinedPoints.length -
+            1
+        ];
+
+      const startJoin =
+        firstPoint
+          ? nearestCompatiblePathPoint(
+              activeMap.paths ??
+                [],
+              pathDraft.kind,
+              pathDraft.roadStyle,
+              firstPoint,
+              joinRadius
+            )
+          : null;
+
+      const endJoin =
+        lastPoint
+          ? nearestCompatiblePathPoint(
+              activeMap.paths ??
+                [],
+              pathDraft.kind,
+              pathDraft.roadStyle,
+              lastPoint,
+              joinRadius
+            )
+          : null;
+
+      if (
+        startJoin &&
+        joinedPoints.length >
+          0
+      ) {
+        joinedPoints[0] = {
+          ...joinedPoints[0],
+          x: startJoin.x,
+          y: startJoin.y,
+        };
+      }
+
+      if (
+        endJoin &&
+        joinedPoints.length >
+          1
+      ) {
+        const lastIndex =
+          joinedPoints.length -
+          1;
+
+        joinedPoints[
+          lastIndex
+        ] = {
+          ...joinedPoints[
+            lastIndex
+          ],
+          x: endJoin.x,
+          y: endJoin.y,
+        };
+      }
+
+      const finishedPath: MapPath = {
+        ...pathDraft,
+
+        width:
+          pathWidth,
+
+        points:
+          joinedPoints,
+      };
 
     updateMap(
       activeMap.id,
@@ -9530,7 +9741,109 @@ export function MapPage({
               }
             )}
 
-            {pathDraft && (
+            {/*
+               * STORYFORGE PATH JOIN COVER V1
+               *
+               * Remove the visible cap/edge where a newly
+               * connected path meets an existing path.
+               */}
+              {(activeMap.paths ?? [])
+                .flatMap(
+                  (mapPath) => {
+                    if (
+                      mapPath.points.length <
+                      2
+                    ) {
+                      return [];
+                    }
+
+                    const endpoints = [
+                      {
+                        point:
+                          mapPath.points[0],
+                        side:
+                          "start",
+                      },
+                      {
+                        point:
+                          mapPath.points[
+                            mapPath.points
+                              .length - 1
+                          ],
+                        side:
+                          "end",
+                      },
+                    ];
+
+                    return endpoints.map(
+                      ({
+                        point,
+                        side,
+                      }) => {
+                        const join =
+                          nearestCompatiblePathPoint(
+                            activeMap.paths ??
+                              [],
+                            mapPath.kind,
+                            mapPath.roadStyle,
+                            point,
+                            0.14,
+                            mapPath.id
+                          );
+
+                        if (!join) {
+                          return null;
+                        }
+
+                        const roadVisual =
+                          roadVisualForStyle(
+                            mapPath.roadStyle
+                          );
+
+                        const fill =
+                          mapPath.kind ===
+                          "river"
+                            ? activeMap
+                                .colors
+                                .water
+                            : roadVisual.main;
+
+                        const radius =
+                          mapPath.kind ===
+                          "river"
+                            ? Math.max(
+                                0.18,
+                                mapPath.width /
+                                  2 +
+                                  0.15
+                              )
+                            : Math.max(
+                                0.07,
+                                mapPath.width /
+                                  2 +
+                                  roadVisual
+                                    .edgeExtra *
+                                    0.55
+                              );
+
+                        return (
+                          <circle
+                            key={
+                              `path-join-${mapPath.id}-${side}`
+                            }
+                            cx={point.x}
+                            cy={point.y}
+                            r={radius}
+                            fill={fill}
+                            pointerEvents="none"
+                          />
+                        );
+                      }
+                    );
+                  }
+                )}
+
+              {pathDraft && (
               <g opacity="0.82">
                 {(() => {
                   const previewPoints =
