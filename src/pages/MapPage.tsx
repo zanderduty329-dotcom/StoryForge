@@ -128,6 +128,25 @@ type MapPath = {
   createdAt: string;
 };
 
+/*
+ * STORYFORGE PATH CROSSING DETECTION V1
+ *
+ * Crossings are derived geometric facts for now.
+ * They are not yet persisted as bridge objects.
+ *
+ * The road/river angles are retained so future
+ * bridge artwork can orient itself correctly.
+ */
+type MapPathCrossing = {
+  id: string;
+  roadId: string;
+  riverId: string;
+  x: number;
+  y: number;
+  roadAngle: number;
+  riverAngle: number;
+};
+
 type MapHistorySnapshot = {
   mapId: string;
   terrain: TerrainStamp[];
@@ -5144,6 +5163,433 @@ function nearestCompatiblePathPoint(
   }
 
   return best;
+}
+
+
+/*
+ * STORYFORGE PATH CROSSING GEOMETRY V1
+ *
+ * Uses true centerline segment intersection.
+ *
+ * - A road crossing a river counts.
+ * - A road endpoint touching a river counts.
+ * - Parallel paths merely running alongside one
+ *   another do NOT count.
+ * - Duplicate hits at sampled vertices collapse
+ *   into one crossing.
+ */
+
+type CrossingSamplePoint = {
+  x: number;
+  y: number;
+};
+
+function crossingSamplesForPath(
+  mapPath: MapPath
+): CrossingSamplePoint[] {
+  const raw =
+    sampleMapPath(
+      mapPath
+    );
+
+  if (
+    raw.length <= 320
+  ) {
+    return raw;
+  }
+
+  /*
+   * Keep crossing work bounded on extremely long
+   * freehand paths while preserving both endpoints.
+   */
+  const stride =
+    Math.max(
+      1,
+      Math.ceil(
+        raw.length / 320
+      )
+    );
+
+  const sampled =
+    raw.filter(
+      (_point, index) =>
+        index === 0 ||
+        index ===
+          raw.length - 1 ||
+        index % stride === 0
+    );
+
+  const finalRaw =
+    raw[
+      raw.length - 1
+    ];
+
+  const finalSample =
+    sampled[
+      sampled.length - 1
+    ];
+
+  if (
+    finalSample.x !==
+      finalRaw.x ||
+    finalSample.y !==
+      finalRaw.y
+  ) {
+    sampled.push({
+      ...finalRaw,
+    });
+  }
+
+  return sampled;
+}
+
+
+function segmentCrossingPoint(
+  a: CrossingSamplePoint,
+  b: CrossingSamplePoint,
+  c: CrossingSamplePoint,
+  d: CrossingSamplePoint
+): {
+  x: number;
+  y: number;
+} | null {
+  const epsilon =
+    0.000001;
+
+  /*
+   * Fast bounding-box rejection before doing the
+   * actual line intersection calculation.
+   */
+  if (
+    Math.max(
+      a.x,
+      b.x
+    ) +
+      epsilon <
+      Math.min(
+        c.x,
+        d.x
+      ) ||
+    Math.max(
+      c.x,
+      d.x
+    ) +
+      epsilon <
+      Math.min(
+        a.x,
+        b.x
+      ) ||
+    Math.max(
+      a.y,
+      b.y
+    ) +
+      epsilon <
+      Math.min(
+        c.y,
+        d.y
+      ) ||
+    Math.max(
+      c.y,
+      d.y
+    ) +
+      epsilon <
+      Math.min(
+        a.y,
+        b.y
+      )
+  ) {
+    return null;
+  }
+
+  const roadX =
+    b.x - a.x;
+
+  const roadY =
+    b.y - a.y;
+
+  const riverX =
+    d.x - c.x;
+
+  const riverY =
+    d.y - c.y;
+
+  const denominator =
+    roadX *
+      riverY -
+    roadY *
+      riverX;
+
+  /*
+   * Parallel / near-parallel segments are not a
+   * crossing. This intentionally prevents roads
+   * following a riverbank from becoming bridges.
+   */
+  if (
+    Math.abs(
+      denominator
+    ) <
+    epsilon
+  ) {
+    return null;
+  }
+
+  const offsetX =
+    c.x - a.x;
+
+  const offsetY =
+    c.y - a.y;
+
+  const roadT =
+    (
+      offsetX *
+        riverY -
+      offsetY *
+        riverX
+    ) /
+    denominator;
+
+  const riverT =
+    (
+      offsetX *
+        roadY -
+      offsetY *
+        roadX
+    ) /
+    denominator;
+
+  /*
+   * Inclusive bounds mean endpoint touches count.
+   */
+  if (
+    roadT <
+      -epsilon ||
+    roadT >
+      1 + epsilon ||
+    riverT <
+      -epsilon ||
+    riverT >
+      1 + epsilon
+  ) {
+    return null;
+  }
+
+  const clampedRoadT =
+    Math.max(
+      0,
+      Math.min(
+        1,
+        roadT
+      )
+    );
+
+  return {
+    x:
+      a.x +
+      roadX *
+        clampedRoadT,
+
+    y:
+      a.y +
+      roadY *
+        clampedRoadT,
+  };
+}
+
+
+function findMapPathCrossings(
+  paths: MapPath[]
+): MapPathCrossing[] {
+  const roads =
+    paths.filter(
+      (mapPath) =>
+        mapPath.kind ===
+          "road" &&
+        mapPath.points.length >=
+          2
+    );
+
+  const rivers =
+    paths.filter(
+      (mapPath) =>
+        mapPath.kind ===
+          "river" &&
+        mapPath.points.length >=
+          2
+    );
+
+  const sampleCache =
+    new Map<
+      string,
+      CrossingSamplePoint[]
+    >();
+
+  const samplesFor = (
+    mapPath: MapPath
+  ) => {
+    const cached =
+      sampleCache.get(
+        mapPath.id
+      );
+
+    if (cached) {
+      return cached;
+    }
+
+    const sampled =
+      crossingSamplesForPath(
+        mapPath
+      );
+
+    sampleCache.set(
+      mapPath.id,
+      sampled
+    );
+
+    return sampled;
+  };
+
+  const crossings:
+    MapPathCrossing[] = [];
+
+  for (
+    const road of roads
+  ) {
+    const roadSamples =
+      samplesFor(
+        road
+      );
+
+    for (
+      const river of rivers
+    ) {
+      const riverSamples =
+        samplesFor(
+          river
+        );
+
+      for (
+        let roadIndex = 1;
+        roadIndex <
+          roadSamples.length;
+        roadIndex += 1
+      ) {
+        const roadA =
+          roadSamples[
+            roadIndex - 1
+          ];
+
+        const roadB =
+          roadSamples[
+            roadIndex
+          ];
+
+        for (
+          let riverIndex = 1;
+          riverIndex <
+            riverSamples.length;
+          riverIndex += 1
+        ) {
+          const riverA =
+            riverSamples[
+              riverIndex - 1
+            ];
+
+          const riverB =
+            riverSamples[
+              riverIndex
+            ];
+
+          const crossing =
+            segmentCrossingPoint(
+              roadA,
+              roadB,
+              riverA,
+              riverB
+            );
+
+          if (!crossing) {
+            continue;
+          }
+
+          /*
+           * A single geometric crossing can be
+           * reported by neighboring sampled segments
+           * when it lands directly on a shared vertex.
+           */
+          const duplicate =
+            crossings.some(
+              (existing) =>
+                existing.roadId ===
+                  road.id &&
+                existing.riverId ===
+                  river.id &&
+                Math.hypot(
+                  existing.x -
+                    crossing.x,
+                  existing.y -
+                    crossing.y
+                ) <
+                  0.20
+            );
+
+          if (duplicate) {
+            continue;
+          }
+
+          const roadAngle =
+            Math.atan2(
+              roadB.y -
+                roadA.y,
+              roadB.x -
+                roadA.x
+            );
+
+          const riverAngle =
+            Math.atan2(
+              riverB.y -
+                riverA.y,
+              riverB.x -
+                riverA.x
+            );
+
+          /*
+           * V1 identity stays deterministic for the
+           * same two paths at the same intersection.
+           */
+          const coordinateKey =
+            `${Math.round(
+              crossing.x *
+                1000
+            )}:${Math.round(
+              crossing.y *
+                1000
+            )}`;
+
+          crossings.push({
+            id:
+              `crossing:${road.id}:${river.id}:${coordinateKey}`,
+
+            roadId:
+              road.id,
+
+            riverId:
+              river.id,
+
+            x:
+              crossing.x,
+
+            y:
+              crossing.y,
+
+            roadAngle,
+            riverAngle,
+          });
+        }
+      }
+    }
+  }
+
+  return crossings;
 }
 
 
@@ -10757,6 +11203,53 @@ export function MapPage({
                       strokeLinejoin="round"
                     />
                   {/*
+                 * STORYFORGE CROSSING DEBUG MARKERS V1
+                 *
+                 * Temporary visual confirmation that the
+                 * geometry engine has found a true road /
+                 * river intersection.
+                 *
+                 * These are not bridge graphics.
+                 */}
+              {findMapPathCrossings(
+                activeMap.paths ?? []
+              ).map(
+                (crossing) => (
+                  <g
+                    key={
+                      crossing.id
+                    }
+                    pointerEvents="none"
+                  >
+                    <circle
+                      cx={
+                        crossing.x
+                      }
+                      cy={
+                        crossing.y
+                      }
+                      r="0.42"
+                      fill="#e6c76f"
+                      fillOpacity="0.92"
+                      stroke="#44382a"
+                      strokeWidth="0.10"
+                    />
+
+                    <circle
+                      cx={
+                        crossing.x
+                      }
+                      cy={
+                        crossing.y
+                      }
+                      r="0.12"
+                      fill="#44382a"
+                    />
+                  </g>
+                )
+              )}
+
+              {/*
                        * Organic bend widening.
                        *
                        * The normal river remains underneath.
