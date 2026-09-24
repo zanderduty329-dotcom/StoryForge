@@ -11203,50 +11203,138 @@ export function MapPage({
                       strokeLinejoin="round"
                     />
                   {/*
-                 * STORYFORGE CROSSING DEBUG MARKERS V1
+                 * STORYFORGE V1 AUTO BRIDGE RENDER V1
                  *
-                 * Temporary visual confirmation that the
-                 * geometry engine has found a true road /
-                 * river intersection.
+                 * Crossing Detection remains the semantic
+                 * source of truth.
                  *
-                 * These are not bridge graphics.
+                 * V1 simply draws a neutral bridge deck
+                 * using the road's existing material.
+                 *
+                 * Editable bridge types, fords, custom
+                 * artwork, and player overrides are
+                 * intentionally deferred to Map V2.
                  */}
               {findMapPathCrossings(
                 activeMap.paths ?? []
               ).map(
-                (crossing) => (
-                  <g
-                    key={
-                      crossing.id
-                    }
-                    pointerEvents="none"
-                  >
-                    <circle
-                      cx={
-                        crossing.x
-                      }
-                      cy={
-                        crossing.y
-                      }
-                      r="0.42"
-                      fill="#e6c76f"
-                      fillOpacity="0.92"
-                      stroke="#44382a"
-                      strokeWidth="0.10"
-                    />
+                (crossing) => {
+                  const road =
+                    (
+                      activeMap.paths ??
+                      []
+                    ).find(
+                      (candidate) =>
+                        candidate.id ===
+                        crossing.roadId
+                    );
 
-                    <circle
-                      cx={
-                        crossing.x
+                  const river =
+                    (
+                      activeMap.paths ??
+                      []
+                    ).find(
+                      (candidate) =>
+                        candidate.id ===
+                        crossing.riverId
+                    );
+
+                  if (
+                    !road ||
+                    !river
+                  ) {
+                    return null;
+                  }
+
+                  const visual =
+                    roadVisualForStyle(
+                      road.roadStyle
+                    );
+
+                  const angleDegrees =
+                    (
+                      crossing.roadAngle *
+                      180
+                    ) /
+                    Math.PI;
+
+                  /*
+                   * Bridge extends beyond both riverbanks
+                   * so the road appears to sit naturally
+                   * on top of the water.
+                   */
+                  const halfLength =
+                    Math.max(
+                      0.72,
+                      river.width *
+                        0.78 +
+                        road.width *
+                          0.65
+                    );
+
+                  const deckWidth =
+                    Math.max(
+                      0.12,
+                      road.width +
+                        0.06
+                    );
+
+                  return (
+                    <g
+                      key={
+                        crossing.id
                       }
-                      cy={
-                        crossing.y
+                      transform={
+                        `translate(${crossing.x} ${crossing.y}) ` +
+                        `rotate(${angleDegrees})`
                       }
-                      r="0.12"
-                      fill="#44382a"
-                    />
-                  </g>
-                )
+                      pointerEvents="none"
+                    >
+                      {/*
+                       * Dark structural edge.
+                       */}
+                      <line
+                        x1={
+                          -halfLength
+                        }
+                        y1="0"
+                        x2={
+                          halfLength
+                        }
+                        y2="0"
+                        stroke={
+                          visual.edge
+                        }
+                        strokeWidth={
+                          deckWidth +
+                          0.14
+                        }
+                        strokeLinecap="square"
+                      />
+
+                      {/*
+                       * Road-material deck.
+                       */}
+                      <line
+                        x1={
+                          -halfLength
+                        }
+                        y1="0"
+                        x2={
+                          halfLength
+                        }
+                        y2="0"
+                        stroke={
+                          visual.main
+                        }
+                        strokeWidth={
+                          deckWidth
+                        }
+                        strokeLinecap="square"
+                      />
+                    </g>
+                  );
+                }
               )}
 
               {/*
