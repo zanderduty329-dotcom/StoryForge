@@ -11,6 +11,7 @@ import { MapPage } from "./pages/MapPage";
 import { InspirationPage } from "./pages/InspirationPage";
 import { SessionPage } from "./pages/SessionPage";
 import { AIAssistant } from "./components/AIAssistant";
+import { CampaignProvider } from "./context/CampaignContext";
 
 export type Page =
   | "home"
@@ -74,7 +75,10 @@ const fetchWorlds = useCallback(() => {
   ];
 
   return (
-    <div className="app-layout">
+    <CampaignProvider
+      campaignId={activeWorld?.id ?? null}
+    >
+      <div className="app-layout">
       {/* ── Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-logo">📖 StoryForge</div>
@@ -145,6 +149,7 @@ const fetchWorlds = useCallback(() => {
 
       {/* ── AI Assistant Panel ── */}
       <AIAssistant world={activeWorld} />
-    </div>
+      </div>
+    </CampaignProvider>
   );
 }
