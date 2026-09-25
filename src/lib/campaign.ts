@@ -377,6 +377,346 @@ export function ensureCampaignCore(
 }
 
 
+
+/*
+ * STORYFORGE CAMPAIGN MEMBERSHIP V1
+ *
+ * Campaign members are the authority boundary
+ * between DM and Player views.
+ *
+ * A player may be connected to one campaign
+ * character. Knowledge remains character-scoped
+ * so changing users does not rewrite what a
+ * character knows.
+ */
+
+export function campaignActiveMemberStorageKey(
+  campaignId: string
+) {
+  return `storyforge-campaign-active-member-${campaignId}`;
+}
+
+
+export function createCampaignPlayer(
+  displayName: string,
+  characterId?: string
+): CampaignMember {
+  const cleanName =
+    displayName.trim() ||
+    "Player";
+
+  return {
+    id:
+      crypto.randomUUID(),
+
+    displayName:
+      cleanName,
+
+    role:
+      "player",
+
+    characterId:
+      characterId ||
+      undefined,
+
+    joinedAt:
+      new Date()
+        .toISOString(),
+  };
+}
+
+
+export function addCampaignPlayer(
+  core: CampaignCore,
+  displayName: string,
+  characterId?: string
+): CampaignCore {
+  const player =
+    createCampaignPlayer(
+      displayName,
+      characterId
+    );
+
+  return {
+    ...core,
+
+    members: [
+      ...core.members,
+      player,
+    ],
+  };
+}
+
+
+export function removeCampaignMember(
+  core: CampaignCore,
+  memberId: string
+): CampaignCore {
+  const member =
+    core.members.find(
+      (candidate) =>
+        candidate.id ===
+        memberId
+    );
+
+  /*
+   * The local campaign owner / DM cannot be
+   * accidentally removed through this helper.
+   */
+  if (
+    !member ||
+    member.id === "local-dm" ||
+    member.role === "dm"
+  ) {
+    return core;
+  }
+
+  return {
+    ...core,
+
+    members:
+      core.members.filter(
+        (candidate) =>
+          candidate.id !==
+          memberId
+      ),
+  };
+}
+
+
+export function renameCampaignMember(
+  core: CampaignCore,
+  memberId: string,
+  displayName: string
+): CampaignCore {
+  const cleanName =
+    displayName.trim();
+
+  if (!cleanName) {
+    return core;
+  }
+
+  return {
+    ...core,
+
+    members:
+      core.members.map(
+        (member) =>
+          member.id ===
+          memberId
+            ? {
+                ...member,
+                displayName:
+                  cleanName,
+              }
+            : member
+      ),
+  };
+}
+
+
+export function linkMemberCharacter(
+  core: CampaignCore,
+  memberId: string,
+  characterId?: string
+): CampaignCore {
+  return {
+    ...core,
+
+    members:
+      core.members.map(
+        (member) =>
+          member.id ===
+          memberId &&
+          member.role ===
+            "player"
+            ? {
+                ...member,
+
+                characterId:
+                  characterId ||
+                  undefined,
+              }
+            : member
+      ),
+  };
+}
+
+
+export function updateMemberPermissions(
+  core: CampaignCore,
+  memberId: string,
+  overrides:
+    Partial<CampaignPermissions>
+): CampaignCore {
+  return {
+    ...core,
+
+    members:
+      core.members.map(
+        (member) =>
+          member.id ===
+          memberId
+            ? {
+                ...member,
+
+                permissions: {
+                  ...(member.permissions ??
+                    {}),
+                  ...overrides,
+                },
+              }
+            : member
+      ),
+  };
+}
+
+
+export function clearMemberPermissionOverrides(
+  core: CampaignCore,
+  memberId: string
+): CampaignCore {
+  return {
+    ...core,
+
+    members:
+      core.members.map(
+        (member) => {
+          if (
+            member.id !==
+            memberId
+          ) {
+            return member;
+          }
+
+          const {
+            permissions:
+              _permissions,
+            ...rest
+          } = member;
+
+          return rest;
+        }
+      ),
+  };
+}
+
+
+export function readActiveCampaignMemberId(
+  campaignId: string
+) {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
+    return null;
+  }
+
+  return (
+    window.localStorage.getItem(
+      campaignActiveMemberStorageKey(
+        campaignId
+      )
+    ) || null
+  );
+}
+
+
+export function writeActiveCampaignMemberId(
+  campaignId: string,
+  memberId: string
+) {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    campaignActiveMemberStorageKey(
+      campaignId
+    ),
+    memberId
+  );
+}
+
+
+
+/*
+ * STORYFORGE CAMPAIGN DELETE V1
+ *
+ * Removes browser data that belongs specifically
+ * to one campaign/world ID.
+ *
+ * storyforge-worlds itself is intentionally NOT
+ * modified here. App.tsx owns the campaign list.
+ */
+export function deleteCampaignLocalData(
+  campaignId: string
+) {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
+    return;
+  }
+
+  const suffix =
+    `-${campaignId}`;
+
+  /*
+   * Remove backwards because localStorage indexes
+   * shift whenever a key is deleted.
+   *
+   * Current StoryForge campaign storage follows
+   * the pattern:
+   *
+   * storyforge-characters-<id>
+   * storyforge-monsters-<id>
+   * storyforge-maps-<id>
+   * storyforge-item-compendium-<id>
+   * storyforge-campaign-core-<id>
+   * storyforge-campaign-active-member-<id>
+   * dice/history keys ending in the same world ID
+   */
+  for (
+    let index =
+      window.localStorage.length - 1;
+    index >= 0;
+    index--
+  ) {
+    const key =
+      window.localStorage.key(
+        index
+      );
+
+    if (!key) {
+      continue;
+    }
+
+    const isStoryForgeKey =
+      key.startsWith(
+        "storyforge-"
+      );
+
+    const belongsToCampaign =
+      key.endsWith(
+        suffix
+      );
+
+    if (
+      isStoryForgeKey &&
+      belongsToCampaign
+    ) {
+      window.localStorage.removeItem(
+        key
+      );
+    }
+  }
+}
+
+
 export function permissionsForMember(
   core: CampaignCore,
   member: CampaignMember

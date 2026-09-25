@@ -12,8 +12,15 @@ import type {
 } from "react";
 
 import {
+  addCampaignPlayer,
   ensureCampaignCore,
+  linkMemberCharacter,
   permissionsForMember,
+  readActiveCampaignMemberId,
+  removeCampaignMember,
+  renameCampaignMember,
+  updateMemberPermissions,
+  writeActiveCampaignMemberId,
   writeCampaignCore,
 } from "../lib/campaign";
 
@@ -49,6 +56,38 @@ type CampaignContextValue = {
       current: CampaignCore
     ) => CampaignCore
   ) => void;
+
+  /*
+   * STORYFORGE CAMPAIGN MEMBERSHIP RUNTIME V1
+   */
+  setActiveMember: (
+    memberId: string
+  ) => void;
+
+  addPlayer: (
+    displayName: string,
+    characterId?: string
+  ) => void;
+
+  removePlayer: (
+    memberId: string
+  ) => void;
+
+  renameMember: (
+    memberId: string,
+    displayName: string
+  ) => void;
+
+  linkPlayerCharacter: (
+    memberId: string,
+    characterId?: string
+  ) => void;
+
+  setMemberPermissions: (
+    memberId: string,
+    overrides:
+      Partial<CampaignPermissions>
+  ) => void;
 };
 
 
@@ -80,6 +119,14 @@ export function CampaignProvider({
   ] =
     useState(false);
 
+  const [
+    activeMemberId,
+    setActiveMemberId,
+  ] =
+    useState<string | null>(
+      null
+    );
+
 
   useEffect(() => {
     if (!campaignId) {
@@ -102,6 +149,48 @@ export function CampaignProvider({
         campaignId
       );
 
+    const savedMemberId =
+      readActiveCampaignMemberId(
+        campaignId
+      );
+
+    const validSavedMember =
+      savedMemberId &&
+      next.members.some(
+        (member) =>
+          member.id ===
+          savedMemberId
+      );
+
+    const nextMemberId =
+      validSavedMember
+        ? savedMemberId
+        : (
+            next.members.find(
+              (member) =>
+                member.id ===
+                "local-dm"
+            ) ??
+            next.members.find(
+              (member) =>
+                member.role ===
+                "dm"
+            ) ??
+            next.members[0]
+          )?.id ??
+          null;
+
+    setActiveMemberId(
+      nextMemberId
+    );
+
+    if (nextMemberId) {
+      writeActiveCampaignMemberId(
+        campaignId,
+        nextMemberId
+      );
+    }
+
     setCore(next);
     setReady(true);
   }, [campaignId]);
@@ -120,6 +209,19 @@ export function CampaignProvider({
         return null;
       }
 
+      if (activeMemberId) {
+        const selected =
+          core.members.find(
+            (member) =>
+              member.id ===
+              activeMemberId
+          );
+
+        if (selected) {
+          return selected;
+        }
+      }
+
       return (
         core.members.find(
           (member) =>
@@ -134,7 +236,10 @@ export function CampaignProvider({
         core.members[0] ??
         null
       );
-    }, [core]);
+    }, [
+      core,
+      activeMemberId,
+    ]);
 
 
   const permissions =
@@ -199,6 +304,163 @@ export function CampaignProvider({
     );
 
 
+  const setActiveMember =
+    useCallback(
+      (memberId: string) => {
+        if (
+          !core ||
+          !campaignId
+        ) {
+          return;
+        }
+
+        const exists =
+          core.members.some(
+            (member) =>
+              member.id ===
+              memberId
+          );
+
+        if (!exists) {
+          return;
+        }
+
+        setActiveMemberId(
+          memberId
+        );
+
+        writeActiveCampaignMemberId(
+          campaignId,
+          memberId
+        );
+      },
+      [
+        core,
+        campaignId,
+      ]
+    );
+
+
+  const addPlayer =
+    useCallback(
+      (
+        displayName: string,
+        characterId?: string
+      ) => {
+        updateCampaignCore(
+          (current) =>
+            addCampaignPlayer(
+              current,
+              displayName,
+              characterId
+            )
+        );
+      },
+      [
+        updateCampaignCore,
+      ]
+    );
+
+
+  const removePlayer =
+    useCallback(
+      (memberId: string) => {
+        updateCampaignCore(
+          (current) =>
+            removeCampaignMember(
+              current,
+              memberId
+            )
+        );
+
+        if (
+          activeMemberId ===
+          memberId
+        ) {
+          setActiveMemberId(
+            "local-dm"
+          );
+
+          if (campaignId) {
+            writeActiveCampaignMemberId(
+              campaignId,
+              "local-dm"
+            );
+          }
+        }
+      },
+      [
+        updateCampaignCore,
+        activeMemberId,
+        campaignId,
+      ]
+    );
+
+
+  const renameMember =
+    useCallback(
+      (
+        memberId: string,
+        displayName: string
+      ) => {
+        updateCampaignCore(
+          (current) =>
+            renameCampaignMember(
+              current,
+              memberId,
+              displayName
+            )
+        );
+      },
+      [
+        updateCampaignCore,
+      ]
+    );
+
+
+  const linkPlayerCharacter =
+    useCallback(
+      (
+        memberId: string,
+        characterId?: string
+      ) => {
+        updateCampaignCore(
+          (current) =>
+            linkMemberCharacter(
+              current,
+              memberId,
+              characterId
+            )
+        );
+      },
+      [
+        updateCampaignCore,
+      ]
+    );
+
+
+  const setMemberPermissions =
+    useCallback(
+      (
+        memberId: string,
+        overrides:
+          Partial<CampaignPermissions>
+      ) => {
+        updateCampaignCore(
+          (current) =>
+            updateMemberPermissions(
+              current,
+              memberId,
+              overrides
+            )
+        );
+      },
+      [
+        updateCampaignCore,
+      ]
+    );
+
+
   const value =
     useMemo<
       CampaignContextValue
@@ -225,6 +487,13 @@ export function CampaignProvider({
         ready,
 
         updateCampaignCore,
+
+        setActiveMember,
+        addPlayer,
+        removePlayer,
+        renameMember,
+        linkPlayerCharacter,
+        setMemberPermissions,
       }),
       [
         campaignId,
@@ -233,6 +502,12 @@ export function CampaignProvider({
         permissions,
         ready,
         updateCampaignCore,
+        setActiveMember,
+        addPlayer,
+        removePlayer,
+        renameMember,
+        linkPlayerCharacter,
+        setMemberPermissions,
       ]
     );
 

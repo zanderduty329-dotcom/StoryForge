@@ -12,6 +12,7 @@ import { InspirationPage } from "./pages/InspirationPage";
 import { SessionPage } from "./pages/SessionPage";
 import { AIAssistant } from "./components/AIAssistant";
 import { CampaignProvider } from "./context/CampaignContext";
+import { deleteCampaignLocalData } from "./lib/campaign";
 
 export type Page =
   | "home"
@@ -61,9 +62,53 @@ const fetchWorlds = useCallback(() => {
     setPage("world");
   };
 
+  /*
+   * STORYFORGE HOME CAMPAIGN MANAGEMENT V1
+   *
+   * World remains the internal data name for V1
+   * compatibility. The user-facing concept is now
+   * Campaign.
+   */
+  const deleteWorld = useCallback(
+    (worldId: string) => {
+      deleteCampaignLocalData(
+        worldId
+      );
+
+      setWorlds(
+        (current) => {
+          const updated =
+            current.filter(
+              (world) =>
+                world.id !==
+                worldId
+            );
+
+          localStorage.setItem(
+            "storyforge-worlds",
+            JSON.stringify(
+              updated
+            )
+          );
+
+          return updated;
+        }
+      );
+
+      if (
+        activeWorld?.id ===
+        worldId
+      ) {
+        setActiveWorld(null);
+        setPage("home");
+      }
+    },
+    [activeWorld]
+  );
+
   const navItems: { key: Page; icon: string; label: string; needsWorld: boolean }[] = [
     { key: "home", icon: "🏠", label: "Home", needsWorld: false },
-    { key: "world", icon: "🌍", label: "Story Bible", needsWorld: true },
+    { key: "world", icon: "🌍", label: "DM Screen", needsWorld: true },
     { key: "characters", icon: "🎭", label: "Characters", needsWorld: true },
     { key: "monsters", icon: "🐉", label: "Monsters", needsWorld: true },
     { key: "locations", icon: "🗺️", label: "Locations", needsWorld: true },
@@ -91,7 +136,7 @@ const fetchWorlds = useCallback(() => {
                 className={`nav-item ${page === item.key ? "active" : ""}`}
                 onClick={() => !disabled && setPage(item.key)}
                 style={disabled ? { opacity: 0.4, cursor: "not-allowed" } : undefined}
-                title={disabled ? "Select a world first" : item.label}
+                title={disabled ? "Open a campaign first" : item.label}
               >
                 <span className="nav-icon">{item.icon}</span>
                 <span>{item.label}</span>
@@ -101,7 +146,7 @@ const fetchWorlds = useCallback(() => {
         </nav>
         {activeWorld && (
           <div style={{ marginTop: "auto", padding: "16px", borderTop: "1px solid var(--border)" }}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>ACTIVE WORLD</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>ACTIVE CAMPAIGN</div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{activeWorld.name}</div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{activeWorld.genre}</div>
           </div>
@@ -112,7 +157,8 @@ const fetchWorlds = useCallback(() => {
       <main className="main-content">
         <div className="top-bar">
           <h1>
-            {page === "home" && "What are we building today?"}
+            {page === "home" && "StoryForge Campaigns"}
+              {page === "world" && "DM Screen"}
             {page === "monsters" && "Monster & Creature Archive"}
             {page === "locations" && "Location & World Archive"}
             {page === "lore" && "Lore Archive"}
@@ -123,14 +169,20 @@ const fetchWorlds = useCallback(() => {
           </h1>
           {activeWorld && page !== "home" && (
             <button className="btn btn-secondary btn-sm" onClick={() => setPage("home")}>
-              ← Switch World
+              ← Campaigns
             </button>
           )}
         </div>
 
         <div className="content-area">
           {page === "home" && (
-            <HomePage worlds={worlds} loading={loading} onOpenWorld={openWorld} onWorldCreated={fetchWorlds} />
+            <HomePage
+                worlds={worlds}
+                loading={loading}
+                onOpenWorld={openWorld}
+                onWorldCreated={fetchWorlds}
+                onDeleteWorld={deleteWorld}
+              />
           )}
 {page === "world" && activeWorld && (
   <WorldPage world={activeWorld} onNavigate={setPage} />
