@@ -13,6 +13,16 @@ import {
   useCampaign,
 } from "../context/CampaignContext";
 
+import {
+  approveCharacterSubmission,
+  readCharacterSubmissions,
+  rejectCharacterSubmission,
+} from "../lib/campaignCharacters";
+
+import type {
+  CampaignCharacterSubmission,
+} from "../lib/campaignCharacters";
+
 
 type CharacterOption = {
   id: string;
@@ -46,6 +56,23 @@ export function WorldPage({
     useState<CharacterOption[]>([]);
 
   const [sessionPrep, setSessionPrep] =
+    useState("");
+
+  const [
+    characterSubmissions,
+    setCharacterSubmissions,
+  ] =
+    useState<
+      CampaignCharacterSubmission[]
+    >([]);
+
+  /*
+   * STORYFORGE DM APPROVAL FEEDBACK V1
+   */
+  const [
+    characterApprovalMessage,
+    setCharacterApprovalMessage,
+  ] =
     useState("");
 
 
@@ -112,6 +139,112 @@ export function WorldPage({
       setSessionPrep("");
     }
   }, [sessionPrepStorageKey]);
+
+
+  /*
+   * STORYFORGE DM CHARACTER APPROVAL V1
+   */
+  useEffect(() => {
+    setCharacterSubmissions(
+      readCharacterSubmissions(
+        world.id
+      )
+    );
+  }, [world.id]);
+
+
+  const pendingCharacterSubmissions =
+    useMemo(
+      () =>
+        characterSubmissions.filter(
+          (submission) =>
+            submission.status ===
+            "pending"
+        ),
+      [characterSubmissions]
+    );
+
+
+  const approveSubmittedCharacter =
+    (
+      submissionId: string
+    ) => {
+      setCharacterApprovalMessage(
+        ""
+      );
+
+      const result =
+        approveCharacterSubmission(
+          world.id,
+          submissionId
+        );
+
+      if (!result) {
+        setCharacterApprovalMessage(
+          "This character request could not be found or is no longer pending."
+        );
+        return;
+      }
+
+      if (!result.ok) {
+        setCharacterSubmissions(
+          result.submissions
+        );
+
+        setCharacterApprovalMessage(
+          result.error
+        );
+
+        return;
+      }
+
+      setCharacterSubmissions(
+        result.submissions
+      );
+
+      /*
+       * Keep the Player assignment dropdown current
+       * without requiring a page refresh.
+       */
+      setCharacters(
+        (current) => {
+          if (
+            current.some(
+              (character) =>
+                character.id ===
+                result.character.id
+            )
+          ) {
+            return current;
+          }
+
+          return [
+            ...current,
+            result.character,
+          ];
+        }
+      );
+
+      setCharacterApprovalMessage(
+        `"${result.character.name}" was approved and added to this campaign's Character Sheet.`
+      );
+    };
+
+
+  const rejectSubmittedCharacter =
+    (
+      submissionId: string
+    ) => {
+      const updated =
+        rejectCharacterSubmission(
+          world.id,
+          submissionId
+        );
+
+      setCharacterSubmissions(
+        updated
+      );
+    };
 
 
   const players =
@@ -511,6 +644,161 @@ export function WorldPage({
           roster using a campaign invitation and
           can bring an approved personal
           character into the campaign.
+        </p>
+      </section>
+
+
+      <section
+        className="card"
+        style={{
+          marginTop: "24px",
+        }}
+      >
+        <h3>
+          Character Requests
+        </h3>
+
+        <p
+          style={{
+            color:
+              "var(--text-secondary)",
+          }}
+        >
+          Personal characters remain owned by their
+          players. Approval creates a separate copy
+          for this campaign.
+        </p>
+
+        {pendingCharacterSubmissions.length ===
+          0 && (
+          <p
+            style={{
+              color:
+                "var(--text-muted)",
+              marginBottom:
+                0,
+            }}
+          >
+            No characters are waiting for approval.
+          </p>
+        )}
+
+        {characterApprovalMessage && (
+          <div
+            className="card"
+            style={{
+              marginTop: "12px",
+            }}
+          >
+            {characterApprovalMessage}
+          </div>
+        )}
+
+        {pendingCharacterSubmissions.map(
+          (submission) => (
+            <div
+              key={
+                submission.id
+              }
+              style={{
+                borderTop:
+                  "1px solid var(--border)",
+                padding:
+                  "14px 0",
+              }}
+            >
+              <strong>
+                {
+                  submission.snapshot.name
+                }
+              </strong>
+
+              <div
+                style={{
+                  color:
+                    "var(--text-secondary)",
+                  fontSize:
+                    "13px",
+                  marginTop:
+                    "4px",
+                }}
+              >
+                {submission.snapshot.ancestry ||
+                  "Unspecified ancestry"}
+
+                {submission.snapshot.role
+                  ? ` • ${submission.snapshot.role}`
+                  : ""}
+              </div>
+
+              {submission.snapshot.background && (
+                <p>
+                  {
+                    submission.snapshot.background
+                  }
+                </p>
+              )}
+
+              <div
+                style={{
+                  display:
+                    "flex",
+                  gap:
+                    "8px",
+                  flexWrap:
+                    "wrap",
+                  marginTop:
+                    "10px",
+                }}
+              >
+                <button
+                  className="btn"
+                  onClick={() =>
+                    approveSubmittedCharacter(
+                      submission.id
+                    )
+                  }
+                >
+                  Approve Character
+                </button>
+
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    const confirmed =
+                      window.confirm(
+                        `Reject ${submission.snapshot.name} for this campaign? The player's personal character will not be deleted.`
+                      );
+
+                    if (
+                      confirmed
+                    ) {
+                      rejectSubmittedCharacter(
+                        submission.id
+                      );
+                    }
+                  }}
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          )
+        )}
+
+        <p
+          style={{
+            fontSize:
+              "12px",
+            color:
+              "var(--text-muted)",
+            marginBottom:
+              0,
+          }}
+        >
+          Future online submissions will use this
+          same review system and identify the
+          submitting campaign member automatically.
         </p>
       </section>
 
