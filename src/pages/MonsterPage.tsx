@@ -1,15 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import {
+  getActiveCampaignStats,
+  getCampaignStat,
+  getCampaignStatModifier,
+  mergeCampaignStatDefaults,
+  readCampaignRulesProfile,
+} from "../lib/campaignRules";
+
+import type {
+  CampaignRulesProfile,
+} from "../lib/campaignRules";
 
 type MonsterStats = {
+  /*
+   * StoryForge system fields.
+   */
   health: number;
   armor: number;
-  strength: number;
-  dexterity: number;
-  constitution: number;
-  intelligence: number;
-  wisdom: number;
-  charisma: number;
+
+  /*
+   * Campaign-defined mechanical stats use
+   * their stable Campaign Stat IDs.
+   */
+  [statId: string]: number;
 };
+
 
 type MonsterModifiers = {
   strength: number;
@@ -28,14 +44,8 @@ type MonsterSize =
   | "Huge"
   | "Gargantuan";
 
-type MonsterSaveStat =
-  | "None"
-  | "Strength"
-  | "Dexterity"
-  | "Constitution"
-  | "Intelligence"
-  | "Wisdom"
-  | "Charisma";
+type MonsterSaveStat = string;
+
 
 type MonsterEffect = {
   id: string;
@@ -99,12 +109,6 @@ type Monster = {
 const blankMonsterStats: MonsterStats = {
   health: 10,
   armor: 10,
-  strength: 10,
-  dexterity: 10,
-  constitution: 10,
-  intelligence: 10,
-  wisdom: 10,
-  charisma: 10,
 };
 
 
@@ -117,8 +121,117 @@ const blankMonsterModifiers: MonsterModifiers = {
   charisma: 0,
 };
 
+function buildMonsterStats(
+  profile: CampaignRulesProfile,
+  current: Record<string, unknown> = {}
+): MonsterStats {
+  const merged =
+    mergeCampaignStatDefaults(
+      profile,
+      {
+        ...blankMonsterStats,
+        ...current,
+      }
+    );
+
+  const result: MonsterStats = {
+    ...blankMonsterStats,
+  };
+
+  /*
+   * Preserve all existing numeric stat values,
+   * including archived campaign stats.
+   */
+  for (
+    const [key, value]
+    of Object.entries(merged)
+  ) {
+    if (
+      typeof value === "number" &&
+      Number.isFinite(value)
+    ) {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
+
+function normalizeMonsterSaveStat(
+  profile: CampaignRulesProfile,
+  value: unknown
+): MonsterSaveStat {
+  const raw =
+    typeof value === "string"
+      ? value.trim()
+      : "";
+
+  if (
+    !raw ||
+    raw.toLowerCase() === "none"
+  ) {
+    return "None";
+  }
+
+  /*
+   * Example legacy migration:
+   *
+   * "Strength" -> "strength"
+   *
+   * Unknown custom references remain intact.
+   */
+  return (
+    getCampaignStat(
+      profile,
+      raw
+    )?.id ??
+    raw
+  );
+}
+
+
+function monsterStatLabel(
+  profile: CampaignRulesProfile,
+  statId: string
+) {
+  if (
+    !statId ||
+    statId === "None"
+  ) {
+    return "None";
+  }
+
+  return (
+    getCampaignStat(
+      profile,
+      statId
+    )?.label ??
+    statId
+  );
+}
+
+
 export function MonsterPage({ worldId }: { worldId: string }) {
   const storageKey = `storyforge-monsters-${worldId}`;
+
+  const rulesProfile =
+    useMemo(
+      () =>
+        readCampaignRulesProfile(
+          worldId
+        ),
+      [worldId]
+    );
+
+  const campaignStats =
+    useMemo(
+      () =>
+        getActiveCampaignStats(
+          rulesProfile
+        ),
+      [rulesProfile]
+    );
 
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [search, setSearch] = useState("");
@@ -128,7 +241,13 @@ export function MonsterPage({ worldId }: { worldId: string }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [name, setName] = useState("");
   const [monsterType, setMonsterType] = useState("");
-  const [stats, setStats] = useState<MonsterStats>({ ...blankMonsterStats });
+  const [stats, setStats] =
+    useState<MonsterStats>(
+      () =>
+        buildMonsterStats(
+          rulesProfile
+        )
+    );
   const [modifiers, setModifiers] = useState<MonsterModifiers>({
     ...blankMonsterModifiers,
   });
@@ -201,10 +320,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
       const upgraded: Monster[] = Array.isArray(parsed)
         ? parsed.map((monster) => ({
             ...monster,
-            stats: {
-              ...blankMonsterStats,
-              ...(monster.stats ?? {}),
-            },
+            stats:
+              buildMonsterStats(
+                rulesProfile,
+                monster.stats ?? {}
+              ),
             modifiers: {
               ...blankMonsterModifiers,
               ...(monster.modifiers ?? {}),
@@ -227,7 +347,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                         damage: effect.damage ?? "",
                         damageType: effect.damageType ?? "",
                         condition: effect.condition ?? "",
-                        saveStat: effect.saveStat ?? "None",
+                        saveStat:
+                        normalizeMonsterSaveStat(
+                          rulesProfile,
+                          effect.saveStat
+                        ),
                         saveDC: effect.saveDC ?? 0,
                         frequency: effect.frequency ?? "Once",
                         durationAmount: effect.durationAmount ?? 1,
@@ -245,7 +369,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
                           damage: attack.secondaryEffect.damage ?? "",
                           damageType: attack.secondaryEffect.damageType ?? "",
                           condition: "",
-                          saveStat: attack.secondaryEffect.saveStat ?? "None",
+                          saveStat:
+                            normalizeMonsterSaveStat(
+                              rulesProfile,
+                              attack.secondaryEffect.saveStat
+                            ),
                           saveDC: attack.secondaryEffect.saveDC ?? 0,
                           frequency: attack.secondaryEffect.frequency ?? "Every Round",
                           durationAmount: 1,
@@ -280,7 +408,7 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     } catch {
       setMonsters([]);
     }
-  }, [storageKey]);
+  }, [storageKey, rulesProfile]);
 
   const filteredMonsters = monsters.filter((monster) =>
     `${monster.name} ${monster.type}`
@@ -299,7 +427,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setSheetOpen(false);
     setName(monsterName);
     setMonsterType("");
-    setStats({ ...blankMonsterStats });
+    setStats(
+      buildMonsterStats(
+        rulesProfile
+      )
+    );
     setModifiers({ ...blankMonsterModifiers });
     setHealthMode("fixed");
     setHealthFormula("");
@@ -319,7 +451,12 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setSheetOpen(true);
     setName(monster.name);
     setMonsterType(monster.type);
-    setStats({ ...blankMonsterStats, ...monster.stats });
+    setStats(
+      buildMonsterStats(
+        rulesProfile,
+        monster.stats
+      )
+    );
     setModifiers({
       ...blankMonsterModifiers,
       ...monster.modifiers,
@@ -342,7 +479,11 @@ export function MonsterPage({ worldId }: { worldId: string }) {
     setSheetOpen(false);
     setName("");
     setMonsterType("");
-    setStats({ ...blankMonsterStats });
+    setStats(
+      buildMonsterStats(
+        rulesProfile
+      )
+    );
     setModifiers({ ...blankMonsterModifiers });
     setHealthMode("fixed");
     setHealthFormula("");
@@ -396,7 +537,7 @@ export function MonsterPage({ worldId }: { worldId: string }) {
   };
 
   const updateStat = (
-    stat: keyof MonsterStats,
+    stat: string,
     value: number
   ) => {
     setStats((old) => ({
@@ -941,84 +1082,95 @@ export function MonsterPage({ worldId }: { worldId: string }) {
             />
           </label>
 
-          {(
-            [
-              ["strength", "Strength"],
-              ["dexterity", "Dexterity"],
-              ["constitution", "Constitution"],
-              ["intelligence", "Intelligence"],
-              ["wisdom", "Wisdom"],
-              ["charisma", "Charisma"],
-            ] as const
-          ).map(([stat, label]) => (
-            <div
-              key={stat}
-              style={{
-                marginTop: "10px",
-                display: "grid",
-                gridTemplateColumns: "1fr 120px",
-                gap: "8px",
-                alignItems: "end",
-              }}
-            >
-              <label>
-                {label}
-                <input
-                  type="number"
-              onWheel={(event) => event.currentTarget.blur()}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "ArrowUp" ||
-                  event.key === "ArrowDown"
-                ) {
-                  event.preventDefault();
-                }
-              }}
-                  value={stats[stat]}
-                  onChange={(event) =>
-                    updateStat(stat, Number(event.target.value))
-                  }
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    marginTop: "4px",
-                    padding: "8px",
-                    borderRadius: "8px",
-                  }}
-                />
-              </label>
+          {campaignStats.map(
+              (stat) => {
+                const score =
+                  stats[stat.id] ??
+                  stat.defaultScore;
 
-              <label>
-                Modifier
-                <input
-                  type="number"
-              onWheel={(event) => event.currentTarget.blur()}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "ArrowUp" ||
-                  event.key === "ArrowDown"
-                ) {
-                  event.preventDefault();
-                }
-              }}
-                  value={modifiers[stat]}
-                  onChange={(event) =>
-                    updateModifier(
-                      stat,
-                      Number(event.target.value)
-                    )
-                  }
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    marginTop: "4px",
-                    padding: "8px",
-                    borderRadius: "8px",
-                  }}
-                />
-              </label>
-            </div>
-          ))}
+                const modifier =
+                  getCampaignStatModifier(
+                    rulesProfile,
+                    score
+                  );
+
+                return (
+                  <div
+                    key={stat.id}
+                    style={{
+                      marginTop: "10px",
+                      display: "grid",
+                      gridTemplateColumns:
+                        "1fr 120px",
+                      gap: "8px",
+                      alignItems: "end",
+                    }}
+                  >
+                    <label>
+                      {stat.label}
+                      {stat.shortLabel
+                        ? ` (${stat.shortLabel})`
+                        : ""}
+
+                      <input
+                        type="number"
+                        value={score}
+                        onWheel={(event) =>
+                          event.currentTarget.blur()
+                        }
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === "ArrowUp" ||
+                            event.key === "ArrowDown"
+                          ) {
+                            event.preventDefault();
+                          }
+                        }}
+                        onChange={(event) =>
+                          updateStat(
+                            stat.id,
+                            Number(
+                              event.target.value
+                            )
+                          )
+                        }
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          marginTop: "4px",
+                          padding: "8px",
+                          borderRadius: "8px",
+                        }}
+                      />
+                    </label>
+
+                    <label>
+                      Modifier
+
+                      <input
+                        type="text"
+                        value={
+                          modifier >= 0
+                            ? `+${modifier}`
+                            : String(modifier)
+                        }
+                        readOnly
+                        aria-label={
+                          `${stat.label} modifier`
+                        }
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          marginTop: "4px",
+                          padding: "8px",
+                          borderRadius: "8px",
+                        }}
+                      />
+                    </label>
+                  </div>
+                );
+              }
+            )}
 
        </details>
 
@@ -1322,7 +1474,10 @@ Saved Attack Effects
 
                     {effect.saveStat !== "None" && (
                       <div style={{ marginTop: "4px" }}>
-                        {effect.saveStat} Save
+                        {monsterStatLabel(
+                            rulesProfile,
+                            effect.saveStat
+                          )} Save
                         {effect.saveDC
                           ? ` • DC ${effect.saveDC}`
                           : ""}
@@ -1563,7 +1718,10 @@ Attack Effects
 
                     {effect.saveStat !== "None" && (
                       <div style={{ marginTop: "4px" }}>
-                        {effect.saveStat} Save
+                        {monsterStatLabel(
+                            rulesProfile,
+                            effect.saveStat
+                          )} Save
                         {effect.saveDC
                           ? ` • DC ${effect.saveDC}`
                           : ""}
@@ -1690,7 +1848,7 @@ Attack Effects
                     value={effectSaveStat}
                     onChange={(event) =>
                       setEffectSaveStat(
-                        event.target.value as MonsterSaveStat
+                        event.target.value
                       )
                     }
                     style={{
@@ -1701,13 +1859,38 @@ Attack Effects
                       borderRadius: "8px",
                     }}
                   >
-                    <option value="None">None</option>
-                    <option value="Strength">Strength</option>
-                    <option value="Dexterity">Dexterity</option>
-                    <option value="Constitution">Constitution</option>
-                    <option value="Intelligence">Intelligence</option>
-                    <option value="Wisdom">Wisdom</option>
-                    <option value="Charisma">Charisma</option>
+                    <option value="None">
+                      None
+                    </option>
+
+                    {effectSaveStat !== "None" &&
+                      !campaignStats.some(
+                        (stat) =>
+                          stat.id ===
+                          effectSaveStat
+                      ) && (
+                      <option
+                        value={effectSaveStat}
+                      >
+                        {
+                          monsterStatLabel(
+                            rulesProfile,
+                            effectSaveStat
+                          )
+                        } (archived / custom)
+                      </option>
+                    )}
+
+                    {campaignStats.map(
+                      (stat) => (
+                        <option
+                          key={stat.id}
+                          value={stat.id}
+                        >
+                          {stat.label}
+                        </option>
+                      )
+                    )}
                   </select>
                 </label>
 

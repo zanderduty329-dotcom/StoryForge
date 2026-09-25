@@ -1,5 +1,12 @@
 export const STAT_KEYS = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"] as const;
 export type StatKey = typeof STAT_KEYS[number];
+
+/*
+ * Universal campaign-defined stat identity.
+ *
+ * StatKey remains temporarily for migration compatibility.
+ */
+export type StatId = string;
 export type RollPurpose = "free" | "attack" | "damage" | "save" | "check";
 export type RollMode = "normal" | "advantage" | "disadvantage";
 export const MODIFIER_RULE = "storyforge-9-10-zero-v1";
@@ -21,7 +28,7 @@ export type RollSource = {
   damageType?: string;
   condition?: string;
   savedFormula?: string;
-  savedStat?: StatKey;
+  savedStat?: StatId;
   savedDC?: number;
 };
 export type RollRequest = {
@@ -33,7 +40,23 @@ export type RollRequest = {
   actor?: EntityRef;
   opponent?: EntityRef;
   source?: RollSource;
-  stat?: { key: StatKey; score: number };
+  stat?: {
+    key: StatId;
+    score: number;
+
+    /*
+     * Campaign Rules Profile resolves this before rolling.
+     *
+     * Optional temporarily for legacy callers/history.
+     */
+    modifier?: number;
+  };
+
+  /*
+   * Stable ID of the campaign modifier rule that produced
+   * stat.modifier.
+   */
+  modifierRule?: string;
   adjustments?: { label: string; value: number }[];
   dc?: number;
   note?: string;
@@ -51,7 +74,7 @@ export type RollResult = {
   adjustmentsTotal: number;
   total: number;
   outcome?: "success" | "failure";
-  modifierRule: typeof MODIFIER_RULE;
+  modifierRule: string;
 };
 
 function integer(value: number, label: string, min: number, max: number) {
@@ -120,8 +143,52 @@ export function rollDice(request: RollRequest, die: (sides: number) => number = 
   if (mode !== "normal" && !(parsed.terms.length === 1 && parsed.terms[0].count === 1 && parsed.terms[0].sides === 20 && parsed.terms[0].sign === 1)) {
     throw new Error("Advantage and disadvantage need one d20, optionally with a modifier.");
   }
-  const statBonus = request.stat ? statModifier(request.stat.score) : 0;
-  if (request.stat && !STAT_KEYS.includes(request.stat.key)) throw new Error("Choose a valid stat.");
+  let statBonus = 0;
+
+  if (request.stat) {
+    const statId =
+      request.stat.key.trim();
+
+    if (!statId) {
+      throw new Error(
+        "Choose a valid stat."
+      );
+    }
+
+    /*
+     * New campaign-aware callers supply modifier directly.
+     */
+    if (
+      request.stat.modifier !== undefined
+    ) {
+      integer(
+        request.stat.score,
+        "Stat score",
+        -10000,
+        10000
+      );
+
+      statBonus =
+        integer(
+          request.stat.modifier,
+          "Stat modifier",
+          -10000,
+          10000
+        );
+    } else {
+      /*
+       * TEMPORARY migration fallback.
+       *
+       * Current DiceTray still supplies only score.
+       * Remove this branch after DiceTray is migrated.
+       */
+      statBonus =
+        statModifier(
+          request.stat.score
+        );
+    }
+  }
+
   const adjustmentsTotal = (request.adjustments ?? []).reduce((sum, item) => sum + integer(item.value, item.label || "Adjustment", -10000, 10000), 0);
   integer(adjustmentsTotal, "Combined adjustments", -10000, 10000);
   if (request.dc !== undefined) integer(request.dc, "Difficulty", 0, 10000);
@@ -145,6 +212,8 @@ export function rollDice(request: RollRequest, die: (sides: number) => number = 
     adjustmentsTotal,
     total,
     outcome: request.dc === undefined ? undefined : total >= request.dc ? "success" : "failure",
-    modifierRule: MODIFIER_RULE,
+    modifierRule:
+      request.modifierRule?.trim() ||
+      MODIFIER_RULE,
   };
 }

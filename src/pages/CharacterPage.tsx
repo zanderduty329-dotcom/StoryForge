@@ -1,22 +1,43 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-type ItemEffect = {
-  id: string;
-  name: string;
-  trigger?: string;
-  saveStat?: string;
-  saveDC?: number;
-  damage?: string;
-  damageType?: string;
-  frequency?: string;
-  durationMode?: "fixed" | "until-save" | "manual";
-  duration?: number;
-  durationUnit?: "rounds" | "affected-turns" | "source-turns";
-  notes?: string;
-};
+import type { GameEffect } from "../lib/gameEffects";
+import {
+  readCampaignItemTemplates,
+  saveCampaignItemTemplate,
+} from "../lib/campaignItems";
+import type {
+  CampaignItemTemplate,
+} from "../lib/campaignItems";
+import {
+  buildLegacyDefaultAction,
+  cloneGameAction,
+} from "../lib/gameActions";
+import type {
+  GameAction,
+} from "../lib/gameActions";
+
+import {
+  getActiveCampaignStats,
+  mergeCampaignStatDefaults,
+  readCampaignRulesProfile,
+} from "../lib/campaignRules";
+
+import type {
+  CampaignRulesProfile,
+} from "../lib/campaignRules";
+/*
+ * Character inventory effects use the universal
+ * StoryForge mechanical effect language.
+ */
+type ItemEffect = GameEffect;
 
 type InventoryItem = {
   id: string;
+
+  /*
+   * Origin only — NOT a live synchronization link.
+   */
+  libraryTemplateId?: string;
   name: string;
   quantity: number;
   description?: string;
@@ -27,8 +48,34 @@ type InventoryItem = {
   durability?: number;
   maxDurability?: number;
   uses?: number;
+
+  /*
+   * uses = current remaining uses
+   * maxUses = fresh/default capacity
+   */
+  maxUses?: number;
   effects?: ItemEffect[];
+
+  /*
+   * A creation may expose multiple independently
+   * resolvable actions.
+   */
+  actions?: GameAction[];
 };
+
+type CharacterStats = {
+  health: number;
+  armor: number;
+  movementSpeed: number;
+  damage: number;
+
+  /*
+   * Campaign-defined mechanical stats also live here
+   * using their stable Campaign Stat ID.
+   */
+  [statId: string]: number;
+};
+
 
 type Character = {
  id: string;
@@ -43,19 +90,47 @@ personality?: string;
 
 inventory?: InventoryItem[];
 
-stats?: {
-  health: number;
-  armor: number;
-  movementSpeed: number;
-  damage: number;
-  strength: number;
-  dexterity: number;
-  constitution: number;
-  intelligence: number;
-  wisdom: number;
-  charisma: number;
+stats?: CharacterStats;
 };
-};
+
+function buildCharacterStats(
+  profile: CampaignRulesProfile,
+  current: Record<string, unknown> = {}
+): CharacterStats {
+  const merged =
+    mergeCampaignStatDefaults(
+      profile,
+      {
+        health: 10,
+        armor: 10,
+        movementSpeed: 30,
+        damage: 1,
+        ...current,
+      }
+    );
+
+  const result: CharacterStats = {
+    health: 10,
+    armor: 10,
+    movementSpeed: 30,
+    damage: 1,
+  };
+
+  for (
+    const [key, value]
+    of Object.entries(merged)
+  ) {
+    if (
+      typeof value === "number" &&
+      Number.isFinite(value)
+    ) {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
 
 const ancestries = [
   "Human",
@@ -92,7 +167,65 @@ type ItemTemplate = {
   description: string;
   armorRating?: number;
   damage?: string;
+
+  /* Universal StoryForge mechanics carried by reusable templates. */
+  /*
+   * Present for campaign-owned templates.
+   */
+  libraryTemplateId?: string;
+
+  /*
+   * Starting uses for a fresh independent copy.
+   */
+  defaultUses?: number;
+
+  effects?: GameEffect[];
+
+  actions?: GameAction[];
 };
+
+function campaignTemplateToItemTemplate(
+  template: CampaignItemTemplate
+): ItemTemplate {
+  return {
+    libraryTemplateId: template.id,
+    name: template.name,
+    category: template.category,
+    description: template.description,
+    damage: template.damage,
+    armorRating: template.armorRating,
+    defaultUses: template.defaultUses,
+
+    effects: template.effects.map((effect) => ({
+      ...effect,
+
+      ...(effect.tags
+        ? {
+            tags: [...effect.tags],
+          }
+        : {}),
+    })),
+  actions:
+    template.actions?.map(
+      (action) =>
+        cloneGameAction(action)
+    ) ?? [],
+
+  };
+}
+
+/*
+ * UI identity is separate from the displayed name.
+ * Campaigns may contain creations with duplicate names.
+ */
+function itemTemplateKey(
+  template: ItemTemplate
+) {
+  return template.libraryTemplateId
+    ? `campaign:${template.libraryTemplateId}`
+    : `builtin:${template.name}`;
+}
+
 
 const itemTemplates: ItemTemplate[] = [
   {
@@ -145,10 +278,32 @@ const [effectEditor, setEffectEditor] = useState<{
   effect: ItemEffect;
   isNew: boolean;
 } | null>(null);
-  const storageKey = `storyforge-characters-${worldId}`;
-  const compendiumStorageKey = `storyforge-item-compendium-${worldId}`;
 
-  const updateInventoryItem = (
+  const [actionEditor, setActionEditor] = useState<{
+    itemId: string;
+    action: GameAction;
+    isNew: boolean;
+  } | null>(null);
+  const storageKey = `storyforge-characters-${worldId}`;
+
+    const rulesProfile =
+      useMemo(
+        () =>
+          readCampaignRulesProfile(
+            worldId
+          ),
+        [worldId]
+      );
+
+    const campaignStats =
+      useMemo(
+        () =>
+          getActiveCampaignStats(
+            rulesProfile
+          ),
+        [rulesProfile]
+      );
+const updateInventoryItem = (
     itemId: string,
     changes: Partial<InventoryItem>
   ) => {
@@ -186,7 +341,6 @@ const [itemDamage, setItemDamage] = useState("");
 const [itemTemplateName, setItemTemplateName] = useState("Create New Item");
 const [itemTemplateSearch, setItemTemplateSearch] = useState("");
 const [customItemTemplates, setCustomItemTemplates] = useState<ItemTemplate[]>([]);
-const [pendingCompendiumItem, setPendingCompendiumItem] = useState<ItemTemplate | null>(null);
 const [showStats, setShowStats] = useState(false);
 const [showInventory, setShowInventory] = useState(false);
 const [inventorySearch, setInventorySearch] = useState("");
@@ -201,48 +355,66 @@ const [itemCategory, setItemCategory] = useState("Weapon");
   ];
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(compendiumStorageKey);
-      const parsed = saved ? JSON.parse(saved) : [];
+    /*
+     * campaignItems.ts also handles one-time migration
+     * from the old StoryForge Compendium storage.
+     */
+    const campaignTemplates =
+      readCampaignItemTemplates(worldId);
 
-      setCustomItemTemplates(
-        Array.isArray(parsed) ? parsed : []
-      );
-    } catch {
-      setCustomItemTemplates([]);
-    }
-  }, [compendiumStorageKey]);
+    setCustomItemTemplates(
+      campaignTemplates.map(
+        campaignTemplateToItemTemplate
+      )
+    );
+  }, [worldId]);
 
   useEffect(() => {
   try {
-const saved = localStorage.getItem(storageKey);
-const parsed: Character[] = saved ? JSON.parse(saved) : [];
+    const saved =
+      localStorage.getItem(
+        storageKey
+      );
 
-const upgraded = parsed.map((character) => ({
-  ...character,
-level: character.level ?? 1,
-inventory: character.inventory ?? [],
-  stats: {
-    health: 10,
-    armor: 10,
-    movementSpeed: 30,
-    damage: 1,
-    strength: 10,
-    dexterity: 10,
-    constitution: 10,
-    intelligence: 10,
-    wisdom: 10,
-    charisma: 10,
-    ...(character.stats ?? {}),
-  },
-}));
+    const parsed: unknown =
+      saved
+        ? JSON.parse(saved)
+        : [];
 
-setCharacters(upgraded);
-localStorage.setItem(storageKey, JSON.stringify(upgraded));
+    const rows: Character[] =
+      Array.isArray(parsed)
+        ? parsed
+        : [];
+
+    const upgraded =
+      rows.map(
+        (character) => ({
+          ...character,
+
+          level:
+            character.level ?? 1,
+
+          inventory:
+            character.inventory ?? [],
+
+          stats:
+            buildCharacterStats(
+              rulesProfile,
+              character.stats ?? {}
+            ),
+        })
+      );
+
+    setCharacters(upgraded);
+
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify(upgraded)
+    );
   } catch {
     setCharacters([]);
   }
-}, [storageKey]);
+}, [storageKey, rulesProfile]);
    const [ancestry, setAncestry] = useState("Human");
   const [role, setRole] = useState("Fighter");
 const [kind, setKind] = useState<"player" | "npc">("player");
@@ -255,18 +427,10 @@ const [kind, setKind] = useState<"player" | "npc">("player");
       kind,
 level: 1,
 inventory: [],
-stats: {
-  health: 10,
-  armor: 10,
-  movementSpeed: 30,
-  damage: 1,
-  strength: 10,
-  dexterity: 10,
-  constitution: 10,
-  intelligence: 10,
-  wisdom: 10,
-  charisma: 10,
-},
+stats:
+    buildCharacterStats(
+      rulesProfile
+    ),
     };
 
 setCharacters((old) => {
@@ -282,7 +446,7 @@ setCharacters((old) => {
     setRole(randomItem(roles.filter((item) => item !== "Custom")));
   };
 const updateStat = (
-  stat: keyof NonNullable<Character["stats"]>,
+  stat: string,
   value: number
 ) => {
   if (!selectedCharacter?.stats) return;
@@ -643,84 +807,61 @@ const effectiveArmor =
     style={{ marginLeft: "8px", width: "80px" }}
   />
 </label>
-<label>
-  💪 Strength:
-  <input
-    type="number"
-    value={selectedCharacter.stats.strength}
-    onChange={(event) =>
-      updateStat("strength", Number(event.target.value))
-    }
-    style={{ marginLeft: "8px", width: "80px" }}
-  />
-</label>
+<div
+    style={{
+      display: "grid",
+      gridTemplateColumns:
+        "repeat(auto-fit, minmax(190px, 1fr))",
+      gap: "10px",
+      marginTop: "12px",
+    }}
+  >
+    {campaignStats.map((stat) => (
+      <label
+        key={stat.id}
+        title={stat.description}
+      >
+        {stat.label}
+        {stat.shortLabel
+          ? ` (${stat.shortLabel})`
+          : ""}
+        :
 
-<br />
-
-<label>
-  🏃 Dexterity:
-  <input
-    type="number"
-    value={selectedCharacter.stats.dexterity}
-    onChange={(event) =>
-      updateStat("dexterity", Number(event.target.value))
-    }
-    style={{ marginLeft: "8px", width: "80px" }}
-  />
-</label>
-
-<br />
-
-<label>
-  🫀 Constitution:
-  <input
-    type="number"
-    value={selectedCharacter.stats.constitution}
-    onChange={(event) =>
-      updateStat("constitution", Number(event.target.value))
-    }
-    style={{ marginLeft: "8px", width: "80px" }}
-  />
-</label> 
-<br />
-
-<label>
-  🧠 Intelligence:
-  <input
-    type="number"
-    value={selectedCharacter.stats.intelligence}
-    onChange={(event) =>
-      updateStat("intelligence", Number(event.target.value))
-    }
-    style={{ marginLeft: "8px", width: "80px" }}
-  />
-</label>
-<br />
-
-<label>
-  🦉 Wisdom:
-  <input
-    type="number"
-    value={selectedCharacter.stats.wisdom}
-    onChange={(event) =>
-      updateStat("wisdom", Number(event.target.value))
-    }
-    style={{ marginLeft: "8px", width: "80px" }}
-  />
-</label>
-<br />
-
-<label>
-  ✨ Charisma:
-  <input
-    type="number"
-    value={selectedCharacter.stats.charisma}
-    onChange={(event) =>
-      updateStat("charisma", Number(event.target.value))
-    }
-    style={{ marginLeft: "8px", width: "80px" }}
-  />
-</label>
+        <input
+          type="number"
+          value={
+            selectedCharacter.stats?.[
+              stat.id
+            ] ??
+            stat.defaultScore
+          }
+          onWheel={(event) =>
+            event.currentTarget.blur()
+          }
+          onKeyDown={(event) => {
+            if (
+              event.key === "ArrowUp" ||
+              event.key === "ArrowDown"
+            ) {
+              event.preventDefault();
+            }
+          }}
+          onChange={(event) =>
+            updateStat(
+              stat.id,
+              Number(
+                event.target.value
+              )
+            )
+          }
+          style={{
+            marginLeft: "8px",
+            width: "80px",
+          }}
+        />
+      </label>
+    ))}
+  </div>
 
   </div>
 )}
@@ -772,10 +913,10 @@ const effectiveArmor =
               )
               .map((template) => (
                 <button
-                  key={template.name}
+                  key={itemTemplateKey(template)}
                   type="button"
                   onClick={() => {
-                    setItemTemplateName(template.name);
+                    setItemTemplateName(itemTemplateKey(template));
                     setItemTemplateSearch(template.name);
                     setItemName(template.name);
                     setItemCategory(template.category);
@@ -872,16 +1013,15 @@ const effectiveArmor =
   <option value="Other" />
 </datalist>
 
-  {itemTemplateName === "Create New Item" &&
-    itemCategory === "Weapon" && (
+  {itemTemplateName === "Create New Item" && (
     <label style={{ display: "block", marginTop: "8px" }}>
       <span style={{ display: "block", marginBottom: "4px" }}>
-        New Weapon Damage
+        Base Formula / Damage (optional)
       </span>
       <input
         value={itemDamage}
         onChange={(event) => setItemDamage(event.target.value)}
-        placeholder="Example: 1d6"
+        placeholder="Examples: 1d6, 2d8+3, 10"
         style={{
           width: "100%",
           padding: "8px",
@@ -911,11 +1051,12 @@ const effectiveArmor =
   onClick={() => {
         const typedItemName = itemName.trim();
 
-        const selectedItemTemplate = allItemTemplates.find(
-          (template) =>
-            template.name === itemTemplateName &&
-            template.name.toLowerCase() === typedItemName.toLowerCase()
-        );
+        const selectedItemTemplate =
+          allItemTemplates.find(
+            (template) =>
+              itemTemplateKey(template) ===
+              itemTemplateName
+          );
 
         const newItemName =
           typedItemName || selectedItemTemplate?.name || "";
@@ -937,12 +1078,53 @@ const effectiveArmor =
       const startingMaxDurability =
         Math.round(startingArmorRating * 10);
 
-        const startingWeaponDamage =
+        const startingBaseFormula =
           itemDamage.trim() || selectedItemTemplate?.damage || "";
 
-      const newItem = {
-        id: crypto.randomUUID(),
-        name: newItemName,
+      const newItem: InventoryItem = {
+          id: crypto.randomUUID(),
+
+          ...(selectedItemTemplate?.libraryTemplateId
+            ? {
+                libraryTemplateId:
+                  selectedItemTemplate.libraryTemplateId,
+              }
+            : {}),
+
+          ...(selectedItemTemplate?.defaultUses !== undefined
+            ? {
+                uses:
+                  selectedItemTemplate.defaultUses,
+
+                maxUses:
+                  selectedItemTemplate.defaultUses,
+              }
+            : {}),
+        effects:
+          (selectedItemTemplate?.effects ?? []).map(
+            (effect) => ({
+              ...effect,
+              id: crypto.randomUUID(),
+              ...(effect.tags
+                ? {
+                    tags: [...effect.tags],
+                  }
+                : {}),
+            })
+          ),
+        actions:
+            (selectedItemTemplate?.actions ?? []).map(
+              (action) =>
+                cloneGameAction(
+                  action,
+                  {
+                    newId: true,
+                    newEffectIds: true,
+                  }
+                )
+            ),
+
+          name: newItemName,
         category: newItemCategory,
         quantity: Math.max(1, itemQuantity),
         description: newItemDescription,
@@ -955,11 +1137,11 @@ const effectiveArmor =
             }
           : {}),
 
-        ...(newItemCategory === "Weapon"
-          ? {
-                damage: startingWeaponDamage,
-            }
-          : {}),
+        ...(startingBaseFormula
+            ? {
+                damage: startingBaseFormula,
+              }
+            : {}),
       };
 
     const updatedCharacter = {
@@ -980,30 +1162,7 @@ const effectiveArmor =
       return updated;
     });
 
-        const alreadyInCompendium = allItemTemplates.some(
-          (template) =>
-            template.name.toLowerCase() === newItemName.toLowerCase()
-        );
-
-        if (!alreadyInCompendium) {
-          setPendingCompendiumItem({
-            name: newItemName,
-            category: newItemCategory,
-            description: newItemDescription,
-
-            ...(newItemCategory === "Armor" || newItemCategory === "Shield"
-              ? { armorRating: startingArmorRating }
-              : {}),
-
-            ...(newItemCategory === "Weapon"
-              ? { damage: startingWeaponDamage }
-              : {}),
-          });
-        } else {
-          setPendingCompendiumItem(null);
-        }
-
-    setItemName("");
+        setItemName("");
     setItemQuantity(1);
     setItemDescription("");
       setItemDamage("");
@@ -1016,68 +1175,7 @@ const effectiveArmor =
   Add Item
 </button>
 
-  {pendingCompendiumItem && (
-    <div
-      style={{
-        marginTop: "12px",
-        padding: "12px",
-        border: "1px solid var(--border)",
-        borderRadius: "8px",
-      }}
-    >
-      <strong>
-        Save "{pendingCompendiumItem.name}" to the Compendium?
-      </strong>
-
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          marginTop: "10px",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            const alreadyExists = allItemTemplates.some(
-              (template) =>
-                template.name.toLowerCase() ===
-                pendingCompendiumItem.name.toLowerCase()
-            );
-
-            if (!alreadyExists) {
-              const updatedCompendium = [
-                ...customItemTemplates,
-                pendingCompendiumItem,
-              ];
-
-              setCustomItemTemplates(updatedCompendium);
-              localStorage.setItem(
-                compendiumStorageKey,
-                JSON.stringify(updatedCompendium)
-              );
-            }
-
-            setPendingCompendiumItem(null);
-          }}
-        >
-          Save to Compendium
-        </button>
-
-        <button
-          type="button"
-          className="btn"
-          onClick={() => setPendingCompendiumItem(null)}
-        >
-          Character Only
-        </button>
-      </div>
-    </div>
-  )}
-
-<label style={{ display: "block", marginTop: "16px" }}>
+  <label style={{ display: "block", marginTop: "16px" }}>
   Search this character's inventory
   <input
     type="search"
@@ -1234,10 +1332,10 @@ const effectiveArmor =
   style={{ marginLeft: "8px", width: "70px" }}
 />
       </label>
-  {item.category === "Weapon" && (
+  {(
     <label style={{ display: "block", marginTop: "8px" }}>
       <span style={{ display: "block", marginBottom: "4px" }}>
-        Weapon Damage
+        Base Formula / Damage
       </span>
 
       <input
@@ -1279,7 +1377,7 @@ const effectiveArmor =
     </label>
   )}
 
-  {item.category === "Weapon" && (
+  {(
     <div
       style={{
         marginTop: "12px",
@@ -1288,7 +1386,7 @@ const effectiveArmor =
         borderRadius: "8px",
       }}
     >
-      <strong>Weapon Effects</strong>
+      <strong>Effects</strong>
 
       {(item.effects ?? []).length === 0 &&
         effectEditor?.itemId !== item.id && (
@@ -1502,12 +1600,39 @@ const effectiveArmor =
                 }}
               >
                 <option value="">None</option>
-                <option value="strength">Strength</option>
-                <option value="dexterity">Dexterity</option>
-                <option value="constitution">Constitution</option>
-                <option value="intelligence">Intelligence</option>
-                <option value="wisdom">Wisdom</option>
-                <option value="charisma">Charisma</option>
+
+                {!!effectEditor.effect.saveStat &&
+                  !campaignStats.some(
+                    (stat) =>
+                      stat.id ===
+                      effectEditor.effect.saveStat
+                  ) && (
+                  <option
+                    value={
+                      effectEditor.effect.saveStat
+                    }
+                  >
+                    {
+                      rulesProfile.stats.find(
+                        (stat) =>
+                          stat.id ===
+                          effectEditor.effect.saveStat
+                      )?.label ??
+                      effectEditor.effect.saveStat
+                    } (archived / custom)
+                  </option>
+                )}
+
+                {campaignStats.map(
+                  (stat) => (
+                    <option
+                      key={stat.id}
+                      value={stat.id}
+                    >
+                      {stat.label}
+                    </option>
+                  )
+                )}
               </select>
             </label>
 
@@ -1915,7 +2040,1729 @@ const effectiveArmor =
     </div>
   )}
 
-  {(item.category === "Armor" || item.category === "Shield") && (
+  {/* STORYFORGE ACTION EDITOR V1 */}
+    <div
+      style={{
+        marginTop: "14px",
+        padding: "12px",
+        border: "1px solid var(--border)",
+        borderRadius: "8px",
+      }}
+    >
+      <strong>Actions</strong>
+
+      <p
+        style={{
+          marginTop: "5px",
+          marginBottom: "10px",
+          opacity: 0.72,
+          fontSize: "0.9em",
+        }}
+      >
+        Actions define how this creation can be used.
+        Each action may contain its own effects.
+      </p>
+
+      {(item.actions ?? []).length === 0 && (
+        <p
+          style={{
+            marginTop: "6px",
+            opacity: 0.72,
+          }}
+        >
+          No explicit actions added.
+          StoryForge can still use the legacy base
+          formula and effects until actions are created.
+        </p>
+      )}
+
+      {(item.actions ?? []).map((action) => {
+        const actionSummary = [
+          action.resolution,
+          action.range,
+          action.effects.length > 0
+            ? `${action.effects.length} effect${
+                action.effects.length === 1
+                  ? ""
+                  : "s"
+              }`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+        return (
+          <button
+            key={action.id}
+            type="button"
+            onClick={() =>
+              setActionEditor({
+                itemId: item.id,
+                action:
+                  cloneGameAction(action),
+                isNew: false,
+              })
+            }
+            style={{
+              display: "block",
+              width: "100%",
+              marginTop: "8px",
+              padding: "10px",
+              textAlign: "left",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              background: "transparent",
+              color: "inherit",
+              cursor: "pointer",
+            }}
+          >
+            <strong>
+              {action.name || "Unnamed Action"}
+            </strong>
+
+            {actionSummary && (
+              <span
+                style={{
+                  display: "block",
+                  marginTop: "3px",
+                  opacity: 0.7,
+                }}
+              >
+                {actionSummary}
+              </span>
+            )}
+          </button>
+        );
+      })}
+
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          flexWrap: "wrap",
+          marginTop: "10px",
+        }}
+      >
+        <button
+          type="button"
+          className="btn"
+          onClick={() =>
+            setActionEditor({
+              itemId: item.id,
+              isNew: true,
+              action: {
+                id: crypto.randomUUID(),
+                name: "",
+                effects: [],
+              },
+            })
+          }
+        >
+          + Add Action
+        </button>
+
+        {(item.actions ?? []).length === 0 &&
+          (
+            item.damage?.trim() ||
+            (item.effects ?? []).length > 0
+          ) && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              const legacyAction =
+                buildLegacyDefaultAction({
+                  creationName:
+                    item.name,
+                  damage:
+                    item.damage,
+                  effects:
+                    item.effects,
+                });
+
+              /*
+               * This opens a NEW editable action.
+               * Nothing is stored until Save Action.
+               */
+              setActionEditor({
+                itemId: item.id,
+                action: legacyAction,
+                isNew: true,
+              });
+            }}
+          >
+            Create Action from Current Mechanics
+          </button>
+        )}
+      </div>
+
+      {actionEditor?.itemId === item.id && (
+        <div
+          style={{
+            marginTop: "14px",
+            padding: "12px",
+            border: "1px solid var(--border)",
+            borderRadius: "8px",
+          }}
+        >
+          <strong>
+            {actionEditor.isNew
+              ? "New Action"
+              : "Edit Action"}
+          </strong>
+
+          <label
+            style={{
+              display: "block",
+              marginTop: "10px",
+            }}
+          >
+            <span
+              style={{
+                display: "block",
+                marginBottom: "4px",
+              }}
+            >
+              Action Name
+            </span>
+
+            <input
+              value={actionEditor.action.name}
+              onChange={(event) =>
+                setActionEditor((current) =>
+                  current
+                    ? {
+                        ...current,
+                        action: {
+                          ...current.action,
+                          name:
+                            event.target.value,
+                        },
+                      }
+                    : current
+                )
+              }
+              placeholder="Strike, Cast, Burst Fire, Activate..."
+              style={{
+                width: "100%",
+                padding: "8px",
+              }}
+            />
+          </label>
+
+          <label
+            style={{
+              display: "block",
+              marginTop: "8px",
+            }}
+          >
+            <span
+              style={{
+                display: "block",
+                marginBottom: "4px",
+              }}
+            >
+              Description
+            </span>
+
+            <textarea
+              value={
+                actionEditor.action.description ??
+                ""
+              }
+              onChange={(event) =>
+                setActionEditor((current) =>
+                  current
+                    ? {
+                        ...current,
+                        action: {
+                          ...current.action,
+                          description:
+                            event.target.value,
+                        },
+                      }
+                    : current
+                )
+              }
+              placeholder="What does this action represent?"
+              rows={2}
+              style={{
+                width: "100%",
+                padding: "8px",
+              }}
+            />
+          </label>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: "8px",
+              marginTop: "8px",
+            }}
+          >
+            <label>
+              <span
+                style={{
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Activation
+              </span>
+
+              <input
+                value={
+                  actionEditor.action.activation ??
+                  ""
+                }
+                onChange={(event) =>
+                  setActionEditor((current) =>
+                    current
+                      ? {
+                          ...current,
+                          action: {
+                            ...current.action,
+                            activation:
+                              event.target.value,
+                          },
+                        }
+                      : current
+                  )
+                }
+                placeholder="Action, reaction, custom..."
+              />
+            </label>
+
+            <label>
+              <span
+                style={{
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Resolution
+              </span>
+
+              <select
+                value={
+                  actionEditor.action.resolution ??
+                  ""
+                }
+                onChange={(event) =>
+                  setActionEditor((current) =>
+                    current
+                      ? {
+                          ...current,
+                          action: {
+                            ...current.action,
+                            resolution:
+                              (
+                                event.target.value ||
+                                undefined
+                              ) as GameAction["resolution"],
+                          },
+                        }
+                      : current
+                  )
+                }
+              >
+                <option value="">
+                  Not specified
+                </option>
+                <option value="automatic">
+                  Automatic
+                </option>
+                <option value="attack">
+                  Attack Roll
+                </option>
+                <option value="save">
+                  Saving Throw
+                </option>
+                <option value="choice">
+                  Choice
+                </option>
+                <option value="custom">
+                  Custom
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <span
+                style={{
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Target
+              </span>
+
+              <input
+                value={
+                  actionEditor.action.target ??
+                  ""
+                }
+                onChange={(event) =>
+                  setActionEditor((current) =>
+                    current
+                      ? {
+                          ...current,
+                          action: {
+                            ...current.action,
+                            target:
+                              event.target.value,
+                          },
+                        }
+                      : current
+                  )
+                }
+                placeholder="Self, one creature..."
+              />
+            </label>
+
+            <label>
+              <span
+                style={{
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Range
+              </span>
+
+              <input
+                value={
+                  actionEditor.action.range ??
+                  ""
+                }
+                onChange={(event) =>
+                  setActionEditor((current) =>
+                    current
+                      ? {
+                          ...current,
+                          action: {
+                            ...current.action,
+                            range:
+                              event.target.value,
+                          },
+                        }
+                      : current
+                  )
+                }
+                placeholder="5 ft, 30 m, line of sight..."
+              />
+            </label>
+
+            <label>
+              <span
+                style={{
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Area
+              </span>
+
+              <input
+                value={
+                  actionEditor.action.area ??
+                  ""
+                }
+                onChange={(event) =>
+                  setActionEditor((current) =>
+                    current
+                      ? {
+                          ...current,
+                          action: {
+                            ...current.action,
+                            area:
+                              event.target.value,
+                          },
+                        }
+                      : current
+                  )
+                }
+                placeholder="15 ft cone, 3x3 squares..."
+              />
+            </label>
+          </div>
+
+          {actionEditor.action.resolution ===
+            "attack" && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "1fr 1fr",
+                gap: "8px",
+                marginTop: "10px",
+              }}
+            >
+              <label>
+                <span
+                  style={{
+                    display: "block",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Attack Stat
+                </span>
+
+                <select
+                  value={
+                    actionEditor.action.attackStat ??
+                    ""
+                  }
+                  onChange={(event) =>
+                    setActionEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            action: {
+                              ...current.action,
+                              attackStat:
+                                event.target.value ||
+                                undefined,
+                            },
+                          }
+                        : current
+                    )
+                  }
+                >
+                  <option value="">
+                    None / no stat
+                  </option>
+
+                  {!!actionEditor.action.attackStat &&
+                    !campaignStats.some(
+                      (stat) =>
+                        stat.id ===
+                        actionEditor.action.attackStat
+                    ) && (
+                    <option
+                      value={
+                        actionEditor.action.attackStat
+                      }
+                    >
+                      {
+                        rulesProfile.stats.find(
+                          (stat) =>
+                            stat.id ===
+                            actionEditor.action.attackStat
+                        )?.label ??
+                        actionEditor.action.attackStat
+                      } (archived / custom)
+                    </option>
+                  )}
+
+                  {campaignStats.map(
+                    (stat) => (
+                      <option
+                        key={stat.id}
+                        value={stat.id}
+                      >
+                        {stat.label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+
+              <label>
+                <span
+                  style={{
+                    display: "block",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Attack Modifier
+                </span>
+
+                <input
+                  type="number"
+                  value={
+                    actionEditor.action
+                      .attackModifier ?? ""
+                  }
+                  onWheel={(event) =>
+                    event.currentTarget.blur()
+                  }
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "ArrowUp" ||
+                      event.key === "ArrowDown"
+                    ) {
+                      event.preventDefault();
+                    }
+                  }}
+                  onChange={(event) =>
+                    setActionEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            action: {
+                              ...current.action,
+                              attackModifier:
+                                event.target.value === ""
+                                  ? undefined
+                                  : Number(
+                                      event.target.value
+                                    ),
+                            },
+                          }
+                        : current
+                    )
+                  }
+                />
+              </label>
+            </div>
+          )}
+
+          {actionEditor.action.resolution ===
+            "save" && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "1fr 1fr",
+                gap: "8px",
+                marginTop: "10px",
+              }}
+            >
+              <label>
+                <span
+                  style={{
+                    display: "block",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Save Stat
+                </span>
+
+                <select
+                  value={
+                    actionEditor.action.saveStat ??
+                    ""
+                  }
+                  onChange={(event) =>
+                    setActionEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            action: {
+                              ...current.action,
+                              saveStat:
+                                event.target.value ||
+                                undefined,
+                            },
+                          }
+                        : current
+                    )
+                  }
+                >
+                  <option value="">
+                    None / no stat
+                  </option>
+
+                  {!!actionEditor.action.saveStat &&
+                    !campaignStats.some(
+                      (stat) =>
+                        stat.id ===
+                        actionEditor.action.saveStat
+                    ) && (
+                    <option
+                      value={
+                        actionEditor.action.saveStat
+                      }
+                    >
+                      {
+                        rulesProfile.stats.find(
+                          (stat) =>
+                            stat.id ===
+                            actionEditor.action.saveStat
+                        )?.label ??
+                        actionEditor.action.saveStat
+                      } (archived / custom)
+                    </option>
+                  )}
+
+                  {campaignStats.map(
+                    (stat) => (
+                      <option
+                        key={stat.id}
+                        value={stat.id}
+                      >
+                        {stat.label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+
+              <label>
+                <span
+                  style={{
+                    display: "block",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Save DC
+                </span>
+
+                <input
+                  type="number"
+                  value={
+                    actionEditor.action.saveDC ??
+                    ""
+                  }
+                  onWheel={(event) =>
+                    event.currentTarget.blur()
+                  }
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "ArrowUp" ||
+                      event.key === "ArrowDown"
+                    ) {
+                      event.preventDefault();
+                    }
+                  }}
+                  onChange={(event) =>
+                    setActionEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            action: {
+                              ...current.action,
+                              saveDC:
+                                event.target.value === ""
+                                  ? undefined
+                                  : Number(
+                                      event.target.value
+                                    ),
+                            },
+                          }
+                        : current
+                    )
+                  }
+                />
+              </label>
+            </div>
+          )}
+
+          {/* ACTION COSTS */}
+          <div
+            style={{
+              marginTop: "14px",
+              paddingTop: "10px",
+              borderTop:
+                "1px solid var(--border)",
+            }}
+          >
+            <strong>Costs</strong>
+
+            {(actionEditor.action.costs ?? []).map(
+              (cost, costIndex) => (
+                <div
+                  key={costIndex}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "2fr 1fr 1fr auto",
+                    gap: "6px",
+                    marginTop: "8px",
+                  }}
+                >
+                  <input
+                    value={cost.resource}
+                    onChange={(event) =>
+                      setActionEditor((current) => {
+                        if (!current) {
+                          return current;
+                        }
+
+                        const costs = [
+                          ...(current.action.costs ??
+                            []),
+                        ];
+
+                        costs[costIndex] = {
+                          ...costs[costIndex],
+                          resource:
+                            event.target.value,
+                        };
+
+                        return {
+                          ...current,
+                          action: {
+                            ...current.action,
+                            costs,
+                          },
+                        };
+                      })
+                    }
+                    placeholder="Ammo, mana, battery..."
+                  />
+
+                  <input
+                    type="number"
+                    value={cost.amount ?? ""}
+                    onChange={(event) =>
+                      setActionEditor((current) => {
+                        if (!current) {
+                          return current;
+                        }
+
+                        const costs = [
+                          ...(current.action.costs ??
+                            []),
+                        ];
+
+                        costs[costIndex] = {
+                          ...costs[costIndex],
+                          amount:
+                            event.target.value === ""
+                              ? undefined
+                              : Number(
+                                  event.target.value
+                                ),
+                        };
+
+                        return {
+                          ...current,
+                          action: {
+                            ...current.action,
+                            costs,
+                          },
+                        };
+                      })
+                    }
+                    placeholder="Amount"
+                  />
+
+                  <input
+                    value={cost.formula ?? ""}
+                    onChange={(event) =>
+                      setActionEditor((current) => {
+                        if (!current) {
+                          return current;
+                        }
+
+                        const costs = [
+                          ...(current.action.costs ??
+                            []),
+                        ];
+
+                        costs[costIndex] = {
+                          ...costs[costIndex],
+                          formula:
+                            event.target.value,
+                        };
+
+                        return {
+                          ...current,
+                          action: {
+                            ...current.action,
+                            costs,
+                          },
+                        };
+                      })
+                    }
+                    placeholder="Formula"
+                  />
+
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() =>
+                      setActionEditor((current) => {
+                        if (!current) {
+                          return current;
+                        }
+
+                        return {
+                          ...current,
+                          action: {
+                            ...current.action,
+                            costs:
+                              (
+                                current.action.costs ??
+                                []
+                              ).filter(
+                                (_, index) =>
+                                  index !== costIndex
+                              ),
+                          },
+                        };
+                      })
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              )
+            )}
+
+            <button
+              type="button"
+              className="btn"
+              style={{
+                marginTop: "8px",
+              }}
+              onClick={() =>
+                setActionEditor((current) =>
+                  current
+                    ? {
+                        ...current,
+                        action: {
+                          ...current.action,
+                          costs: [
+                            ...(current.action.costs ??
+                              []),
+                            {
+                              resource: "",
+                            },
+                          ],
+                        },
+                      }
+                    : current
+                )
+              }
+            >
+              + Add Cost
+            </button>
+          </div>
+
+          {/* ACTION EFFECTS */}
+          <div
+            style={{
+              marginTop: "14px",
+              paddingTop: "10px",
+              borderTop:
+                "1px solid var(--border)",
+            }}
+          >
+            <strong>Action Effects</strong>
+
+            {actionEditor.action.effects.map(
+              (effect, effectIndex) => (
+                <div
+                  key={effect.id}
+                  style={{
+                    marginTop: "10px",
+                    padding: "10px",
+                    border:
+                      "1px solid var(--border)",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "2fr 1fr",
+                      gap: "8px",
+                    }}
+                  >
+                    <input
+                      value={effect.name}
+                      onChange={(event) =>
+                        setActionEditor(
+                          (current) => {
+                            if (!current) {
+                              return current;
+                            }
+
+                            const effects = [
+                              ...current.action
+                                .effects,
+                            ];
+
+                            effects[effectIndex] = {
+                              ...effects[
+                                effectIndex
+                              ],
+                              name:
+                                event.target.value,
+                            };
+
+                            return {
+                              ...current,
+                              action: {
+                                ...current.action,
+                                effects,
+                              },
+                            };
+                          }
+                        )
+                      }
+                      placeholder="Effect name"
+                    />
+
+                    <select
+                      value={effect.kind ?? ""}
+                      onChange={(event) =>
+                        setActionEditor(
+                          (current) => {
+                            if (!current) {
+                              return current;
+                            }
+
+                            const effects = [
+                              ...current.action
+                                .effects,
+                            ];
+
+                            effects[effectIndex] = {
+                              ...effects[
+                                effectIndex
+                              ],
+                              kind:
+                                (
+                                  event.target.value ||
+                                  undefined
+                                ) as GameEffect["kind"],
+                            };
+
+                            return {
+                              ...current,
+                              action: {
+                                ...current.action,
+                                effects,
+                              },
+                            };
+                          }
+                        )
+                      }
+                    >
+                      <option value="">
+                        Effect Type
+                      </option>
+                      <option value="damage">
+                        Damage
+                      </option>
+                      <option value="healing">
+                        Healing
+                      </option>
+                      <option value="condition">
+                        Condition
+                      </option>
+                      <option value="movement">
+                        Movement
+                      </option>
+                      <option value="resource">
+                        Resource
+                      </option>
+                      <option value="defense">
+                        Defense
+                      </option>
+                      <option value="utility">
+                        Utility
+                      </option>
+                      <option value="custom">
+                        Custom
+                      </option>
+                    </select>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(135px, 1fr))",
+                      gap: "8px",
+                      marginTop: "8px",
+                    }}
+                  >
+                    <input
+                      value={
+                        effect.formula ??
+                        effect.damage ??
+                        ""
+                      }
+                      onChange={(event) =>
+                        setActionEditor(
+                          (current) => {
+                            if (!current) {
+                              return current;
+                            }
+
+                            const effects = [
+                              ...current.action
+                                .effects,
+                            ];
+
+                            effects[effectIndex] = {
+                              ...effects[
+                                effectIndex
+                              ],
+                              formula:
+                                event.target.value,
+
+                              /*
+                               * Keep legacy damage
+                               * populated for current
+                               * combat compatibility.
+                               */
+                              ...(effects[
+                                effectIndex
+                              ].kind === "damage"
+                                ? {
+                                    damage:
+                                      event.target
+                                        .value,
+                                  }
+                                : {}),
+                            };
+
+                            return {
+                              ...current,
+                              action: {
+                                ...current.action,
+                                effects,
+                              },
+                            };
+                          }
+                        )
+                      }
+                      placeholder="Formula: 2d8+3"
+                    />
+
+                    <input
+                      value={
+                        effect.damageType ??
+                        ""
+                      }
+                      onChange={(event) =>
+                        setActionEditor(
+                          (current) => {
+                            if (!current) {
+                              return current;
+                            }
+
+                            const effects = [
+                              ...current.action
+                                .effects,
+                            ];
+
+                            effects[effectIndex] = {
+                              ...effects[
+                                effectIndex
+                              ],
+                              damageType:
+                                event.target.value,
+                            };
+
+                            return {
+                              ...current,
+                              action: {
+                                ...current.action,
+                                effects,
+                              },
+                            };
+                          }
+                        )
+                      }
+                      placeholder="Damage/type"
+                    />
+
+                    <input
+                      value={
+                        effect.condition ?? ""
+                      }
+                      onChange={(event) =>
+                        setActionEditor(
+                          (current) => {
+                            if (!current) {
+                              return current;
+                            }
+
+                            const effects = [
+                              ...current.action
+                                .effects,
+                            ];
+
+                            effects[effectIndex] = {
+                              ...effects[
+                                effectIndex
+                              ],
+                              condition:
+                                event.target.value,
+                            };
+
+                            return {
+                              ...current,
+                              action: {
+                                ...current.action,
+                                effects,
+                              },
+                            };
+                          }
+                        )
+                      }
+                      placeholder="Condition"
+                    />
+
+                    <input
+                      value={
+                        effect.trigger ?? ""
+                      }
+                      onChange={(event) =>
+                        setActionEditor(
+                          (current) => {
+                            if (!current) {
+                              return current;
+                            }
+
+                            const effects = [
+                              ...current.action
+                                .effects,
+                            ];
+
+                            effects[effectIndex] = {
+                              ...effects[
+                                effectIndex
+                              ],
+                              trigger:
+                                event.target.value,
+                            };
+
+                            return {
+                              ...current,
+                              action: {
+                                ...current.action,
+                                effects,
+                              },
+                            };
+                          }
+                        )
+                      }
+                      placeholder="Trigger"
+                    />
+
+                    <input
+                      value={
+                        effect.saveStat ?? ""
+                      }
+                      onChange={(event) =>
+                        setActionEditor(
+                          (current) => {
+                            if (!current) {
+                              return current;
+                            }
+
+                            const effects = [
+                              ...current.action
+                                .effects,
+                            ];
+
+                            effects[effectIndex] = {
+                              ...effects[
+                                effectIndex
+                              ],
+                              saveStat:
+                                event.target.value,
+                            };
+
+                            return {
+                              ...current,
+                              action: {
+                                ...current.action,
+                                effects,
+                              },
+                            };
+                          }
+                        )
+                      }
+                      placeholder="Save stat"
+                    />
+
+                    <input
+                      type="number"
+                      value={
+                        effect.saveDC ?? ""
+                      }
+                      onChange={(event) =>
+                        setActionEditor(
+                          (current) => {
+                            if (!current) {
+                              return current;
+                            }
+
+                            const effects = [
+                              ...current.action
+                                .effects,
+                            ];
+
+                            effects[effectIndex] = {
+                              ...effects[
+                                effectIndex
+                              ],
+                              saveDC:
+                                event.target.value ===
+                                ""
+                                  ? undefined
+                                  : Number(
+                                      event.target
+                                        .value
+                                    ),
+                            };
+
+                            return {
+                              ...current,
+                              action: {
+                                ...current.action,
+                                effects,
+                              },
+                            };
+                          }
+                        )
+                      }
+                      placeholder="DC"
+                    />
+                  </div>
+
+                  <textarea
+                    value={effect.notes ?? ""}
+                    onChange={(event) =>
+                      setActionEditor(
+                        (current) => {
+                          if (!current) {
+                            return current;
+                          }
+
+                          const effects = [
+                            ...current.action
+                              .effects,
+                          ];
+
+                          effects[effectIndex] = {
+                            ...effects[
+                              effectIndex
+                            ],
+                            notes:
+                              event.target.value,
+                          };
+
+                          return {
+                            ...current,
+                            action: {
+                              ...current.action,
+                              effects,
+                            },
+                          };
+                        }
+                      )
+                    }
+                    placeholder="Effect notes / custom rules"
+                    rows={2}
+                    style={{
+                      width: "100%",
+                      marginTop: "8px",
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{
+                      marginTop: "8px",
+                    }}
+                    onClick={() =>
+                      setActionEditor(
+                        (current) =>
+                          current
+                            ? {
+                                ...current,
+                                action: {
+                                  ...current.action,
+                                  effects:
+                                    current.action.effects.filter(
+                                      (_, index) =>
+                                        index !==
+                                        effectIndex
+                                    ),
+                                },
+                              }
+                            : current
+                      )
+                    }
+                  >
+                    Remove Effect
+                  </button>
+                </div>
+              )
+            )}
+
+            <button
+              type="button"
+              className="btn"
+              style={{
+                marginTop: "8px",
+              }}
+              onClick={() =>
+                setActionEditor((current) =>
+                  current
+                    ? {
+                        ...current,
+                        action: {
+                          ...current.action,
+                          effects: [
+                            ...current.action.effects,
+                            {
+                              id:
+                                crypto.randomUUID(),
+                              name: "",
+                            },
+                          ],
+                        },
+                      }
+                    : current
+                )
+              }
+            >
+              + Add Effect
+            </button>
+          </div>
+
+          <label
+            style={{
+              display: "block",
+              marginTop: "12px",
+            }}
+          >
+            <span
+              style={{
+                display: "block",
+                marginBottom: "4px",
+              }}
+            >
+              Action Notes
+            </span>
+
+            <textarea
+              value={
+                actionEditor.action.notes ??
+                ""
+              }
+              onChange={(event) =>
+                setActionEditor((current) =>
+                  current
+                    ? {
+                        ...current,
+                        action: {
+                          ...current.action,
+                          notes:
+                            event.target.value,
+                        },
+                      }
+                    : current
+                )
+              }
+              rows={2}
+              style={{
+                width: "100%",
+              }}
+            />
+          </label>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              flexWrap: "wrap",
+              marginTop: "12px",
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                const cleanAction:
+                  GameAction = {
+                  ...actionEditor.action,
+
+                  name:
+                    actionEditor.action.name.trim() ||
+                    "Unnamed Action",
+
+                  description:
+                    actionEditor.action
+                      .description?.trim() ||
+                    "",
+
+                  activation:
+                    actionEditor.action
+                      .activation?.trim() ||
+                    "",
+
+                  target:
+                    actionEditor.action
+                      .target?.trim() ||
+                    "",
+
+                  range:
+                    actionEditor.action
+                      .range?.trim() ||
+                    "",
+
+                  area:
+                    actionEditor.action
+                      .area?.trim() ||
+                    "",
+
+                  notes:
+                    actionEditor.action
+                      .notes?.trim() ||
+                    "",
+
+                  costs:
+                    (
+                      actionEditor.action.costs ??
+                      []
+                    )
+                      .map((cost) => ({
+                        ...cost,
+                        resource:
+                          cost.resource.trim(),
+                        formula:
+                          cost.formula?.trim() ||
+                          "",
+                        notes:
+                          cost.notes?.trim() ||
+                          "",
+                      }))
+                      .filter(
+                        (cost) =>
+                          cost.resource ||
+                          cost.amount !== undefined ||
+                          cost.formula
+                      ),
+
+                  effects:
+                    actionEditor.action.effects.map(
+                      (effect) => ({
+                        ...effect,
+
+                        name:
+                          effect.name.trim() ||
+                          "Unnamed Effect",
+
+                        formula:
+                          effect.formula?.trim() ||
+                          "",
+
+                        damage:
+                          effect.damage?.trim() ||
+                          "",
+
+                        damageType:
+                          effect.damageType?.trim() ||
+                          "",
+
+                        condition:
+                          effect.condition?.trim() ||
+                          "",
+
+                        trigger:
+                          effect.trigger?.trim() ||
+                          "",
+
+                        saveStat:
+                          effect.saveStat?.trim() ||
+                          "",
+
+                        notes:
+                          effect.notes?.trim() ||
+                          "",
+                      })
+                    ),
+                };
+
+                const currentActions =
+                  item.actions ?? [];
+
+                const updatedActions =
+                  actionEditor.isNew
+                    ? [
+                        ...currentActions,
+                        cleanAction,
+                      ]
+                    : currentActions.map(
+                        (savedAction) =>
+                          savedAction.id ===
+                          cleanAction.id
+                            ? cleanAction
+                            : savedAction
+                      );
+
+                updateInventoryItem(
+                  item.id,
+                  {
+                    actions:
+                      updatedActions,
+                  }
+                );
+
+                setActionEditor(null);
+              }}
+            >
+              Save Action
+            </button>
+
+            <button
+              type="button"
+              className="btn"
+              onClick={() =>
+                setActionEditor(null)
+              }
+            >
+              Cancel
+            </button>
+
+            {!actionEditor.isNew && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  updateInventoryItem(
+                    item.id,
+                    {
+                      actions:
+                        (item.actions ?? []).filter(
+                          (action) =>
+                            action.id !==
+                            actionEditor.action.id
+                        ),
+                    }
+                  );
+
+                  setActionEditor(null);
+                }}
+              >
+                Delete Action
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+
+    {/* STORYFORGE CAMPAIGN LIBRARY SAVE V1 */}
+    <div
+      style={{
+        marginTop: "12px",
+        paddingTop: "12px",
+        borderTop: "1px solid var(--border)",
+      }}
+    >
+      <button
+        type="button"
+        className="btn"
+        onClick={() => {
+          const result =
+            saveCampaignItemTemplate(
+              worldId,
+              {
+                /*
+                 * Existing provenance means this is an
+                 * explicit update. No provenance means
+                 * create a new campaign template.
+                 */
+                templateId:
+                  item.libraryTemplateId,
+
+                name:
+                  item.name.trim() ||
+                  "Unnamed Item",
+
+                category:
+                  item.category?.trim() ||
+                  "Other",
+
+                description:
+                  item.description?.trim() ||
+                  "",
+
+                ...(item.damage?.trim()
+                  ? {
+                      damage:
+                        item.damage.trim(),
+                    }
+                  : {}),
+
+                ...(item.armorBonus !== undefined
+                  ? {
+                      armorRating:
+                        item.armorBonus,
+                    }
+                  : {}),
+
+                ...(
+                  item.maxUses !== undefined ||
+                  item.uses !== undefined
+                    ? {
+                        defaultUses:
+                          Math.max(
+                            0,
+                            item.maxUses ??
+                              item.uses ??
+                              0
+                          ),
+                      }
+                    : {}
+                ),
+
+                effects:
+                  item.effects ?? [],
+
+                actions:
+                  item.actions ?? [],
+              }
+            );
+
+          /*
+           * Refresh the campaign-owned template view.
+           */
+          setCustomItemTemplates(
+            result.templates.map(
+              campaignTemplateToItemTemplate
+            )
+          );
+
+          /*
+           * Provenance only.
+           * The inventory copy remains independent.
+           */
+          updateInventoryItem(
+            item.id,
+            {
+              libraryTemplateId:
+                result.template.id,
+            }
+          );
+        }}
+      >
+        {item.libraryTemplateId
+          ? "Update Campaign Template"
+          : "Save to Campaign Library"}
+      </button>
+
+      {item.libraryTemplateId && (
+        <span
+          style={{
+            marginLeft: "8px",
+            opacity: 0.7,
+            fontSize: "0.9em",
+          }}
+        >
+          Campaign origin recorded
+        </span>
+      )}
+    </div>
+
+    {(item.category === "Armor" || item.category === "Shield") && (
   <div
     style={{
       marginTop: "8px",

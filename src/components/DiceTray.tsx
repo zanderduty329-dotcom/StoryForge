@@ -1,6 +1,19 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { rollDice, signed, statModifier, STAT_KEYS } from "../lib/dice";
-import type { RollMode, RollPurpose, RollResult, StatKey } from "../lib/dice";
+import { rollDice, signed } from "../lib/dice";
+import type {
+  RollMode,
+  RollPurpose,
+  RollResult,
+  StatId,
+} from "../lib/dice";
+
+import {
+  createDefaultCampaignRulesProfile,
+  getActiveCampaignStats,
+  getCampaignStat,
+  getCampaignStatModifier,
+  readCampaignRulesProfile,
+} from "../lib/campaignRules";
 import { readActors, readHistory, recordRoll } from "../lib/diceArchive";
 import type { DiceActor } from "../lib/diceArchive";
 import "./DiceTray.css";
@@ -8,7 +21,7 @@ import "./DiceTray.css";
 const title = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 const PURPOSES: { value: RollPurpose; label: string }[] = [
   { value: "free", label: "Free roll" }, { value: "attack", label: "Attack / to hit" },
-  { value: "damage", label: "Damage" }, { value: "save", label: "Saving throw" },
+  { value: "damage", label: "Damage / effect" }, { value: "save", label: "Saving throw" },
   { value: "check", label: "Stat / skill check" },
 ];
 
@@ -129,13 +142,28 @@ export function DiceTray({ worldId }: { worldId?: string }) {
 }
 
 function DiceTrayBody({ worldId }: { worldId?: string }) {
+  /*
+   * STORYFORGE DYNAMIC DICE STATS V3C
+   *
+   * The campaign profile defines available stats
+   * and how scores become roll modifiers.
+   */
+  const rulesProfile =
+    worldId
+      ? readCampaignRulesProfile(
+          worldId
+        )
+      : createDefaultCampaignRulesProfile(
+          "__standalone__"
+        );
+
   const [archive, setArchive] = useState(() => readActors(worldId));
   const [purpose, setPurpose] = useState<RollPurpose>("free");
   const [actorKey, setActorKey] = useState("");
   const [opponentKey, setOpponentKey] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [effectId, setEffectId] = useState("");
-  const [statKey, setStatKey] = useState<StatKey | "none">("none");
+  const [statKey, setStatKey] = useState<StatId>("");
   const [formula, setFormula] = useState("1d20");
   const [mode, setMode] = useState<RollMode>("normal");
   const [adjustment, setAdjustment] = useState("0");
@@ -152,7 +180,20 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
     : undefined;
 
   const primaryActions =
-    actor?.actions.filter((item) => !item.source.attackId) ?? [];
+    actor?.actions.filter(
+      (item) =>
+        !item.source.attackId &&
+        (
+          purpose === "attack"
+            ? (
+                item.resolution === undefined ||
+                item.resolution === "attack"
+              )
+            : purpose === "damage"
+              ? Boolean(item.formula)
+              : true
+        )
+    ) ?? [];
 
   const linkedEffects =
     sourceId
@@ -167,8 +208,57 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
   const save = purpose === "save"
     ? opponent?.saves.find((item) => item.id === sourceId)
     : undefined;
-  const score = statKey === "none" ? undefined : actor?.stats[statKey];
-  const statBonus = score === undefined ? undefined : statModifier(score);
+  const activeStats =
+    getActiveCampaignStats(
+      rulesProfile
+    );
+
+  const selectedStatDefinition =
+    statKey
+      ? getCampaignStat(
+          rulesProfile,
+          statKey
+        )
+      : undefined;
+
+  /*
+   * Archived stats are hidden from ordinary
+   * selection but remain usable by old actions.
+   */
+  const statOptions =
+    selectedStatDefinition?.archived &&
+    !activeStats.some(
+      (stat) =>
+        stat.id ===
+        selectedStatDefinition.id
+    )
+      ? [
+          ...activeStats,
+          selectedStatDefinition,
+        ]
+      : activeStats;
+
+  const score =
+    statKey
+      ? actor?.stats[statKey]
+      : undefined;
+
+  const statBonus =
+    score === undefined
+      ? undefined
+      : getCampaignStatModifier(
+          rulesProfile,
+          score
+        );
+
+  const modifierRuleHint =
+    rulesProfile.modifierRule.kind === "none"
+      ? "Campaign rule: stats add no automatic modifier."
+      : rulesProfile.modifierRule.kind === "raw-score"
+        ? "Campaign rule: the full stat score is used as the modifier."
+        : rulesProfile.modifierRule.kind === "table"
+          ? "Campaign rule: modifier resolved from the campaign table."
+          : "StoryForge modifier scale: 9–10 = 0; 11–12 = +1; 19–20 = +5.";
 
   useEffect(() => {
     function refresh() {
@@ -182,7 +272,7 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
   }, [worldId]);
 
   function changePurpose(value: RollPurpose) {
-    setPurpose(value); setSourceId(""); setEffectId(""); setStatKey("none"); setDC("");
+    setPurpose(value); setSourceId(""); setEffectId(""); setStatKey(""); setDC("");
     setFormula(value === "damage" ? "1d6" : "1d20"); setMode("normal"); setError("");
   }
 
@@ -190,12 +280,23 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
     setSourceId(value); setEffectId(""); setError("");
     if (purpose === "save") {
       const selected = opponent?.saves.find((item) => item.id === value);
-      setStatKey(selected?.stat ?? "none");
+      setStatKey(selected?.stat ?? "");
       setDC(selected?.dc === undefined ? "" : String(selected.dc));
       setFormula("1d20"); setMode("normal");
     } else {
       const selected = actor?.actions.find((item) => item.id === value);
-      setFormula(purpose === "damage" ? selected ? selected.formula : "1d6" : "1d20");
+      if (purpose === "attack") {
+        setFormula("1d20");
+
+        setStatKey(
+          selected?.stat ?? ""
+        );
+      } else {
+        setFormula(
+          selected?.formula ||
+          "1d6"
+        );
+      }
       setMode("normal");
     }
   }
@@ -222,13 +323,30 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
       if (opponentKey && !opponent) throw new Error("Select a current target or source creature.");
       if (sourceId && !action && !save) throw new Error("The saved action changed. Select it again.");
       if (effectId && !effectAction) throw new Error("The linked effect changed. Select it again.");
-      if (statKey !== "none" && score === undefined) throw new Error("Select a saved character or creature with a valid score for this stat.");
-      const requestStat = statKey !== "none" && score !== undefined ? { key: statKey, score } : undefined;
+      if (
+        statKey &&
+        score === undefined
+      ) {
+        throw new Error(
+          "Select a saved character or creature with a valid score for this stat."
+        );
+      }
+
+      const requestStat =
+        statKey &&
+        score !== undefined &&
+        statBonus !== undefined
+          ? {
+              key: statKey,
+              score,
+              modifier: statBonus,
+            }
+          : undefined;
       const adjustments = [{ label: "Situational / DM adjustment", value: adjustment.trim() === "" ? 0 : Number(adjustment) }];
       if (purpose === "attack" && action) adjustments.unshift({ label: `${action.name} attack bonus`, value: action.bonus });
       const rolled = rollDice({
         formula, mode, purpose, worldId, actor: actor?.ref, opponent: opponent?.ref,
-        source: effectAction?.source ?? save?.source ?? action?.source, stat: requestStat, adjustments,
+        source: effectAction?.source ?? save?.source ?? action?.source, stat: requestStat, modifierRule: rulesProfile.modifierRule.id, adjustments,
         dc: dc.trim() === "" ? undefined : Number(dc), note: note.trim() || undefined,
       });
       setResult(rolled);
@@ -263,34 +381,62 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
         <ActorSearch label="Roll as" searchLabel="Search roller" emptyLabel="No character selected"
           actors={archive.actors} value={actorKey} disabled={!worldId} onChange={(value) => {
             setActorKey(value); if (purpose !== "save") setSourceId("");
-            if (purpose !== "save" || !save) setStatKey("none");
+            if (purpose !== "save" || !save) setStatKey("");
           }} />
         <ActorSearch label={purpose === "save" ? "Saving throw caused by" : "Target (optional)"}
           searchLabel={purpose === "save" ? "Search effect source" : "Search target"} emptyLabel="None"
           actors={archive.actors} value={opponentKey} disabled={!worldId} onChange={(value) => {
             setOpponentKey(value);
-            if (purpose === "save") { setSourceId(""); setStatKey("none"); setDC(""); }
+            if (purpose === "save") { setSourceId(""); setStatKey(""); setDC(""); }
           }} />
-        <label>Stat<select value={statKey} onChange={(event) => setStatKey(event.target.value as StatKey | "none")}>
-          <option value="none">None — no stat bonus</option>
-          {STAT_KEYS.map((key) => <option key={key} value={key}>{title(key)}</option>)}
+        <label>Stat<select
+          value={statKey}
+          onChange={(event) =>
+            setStatKey(
+              event.target.value
+            )
+          }
+        >
+          <option value="">
+            None — no stat bonus
+          </option>
+
+          {statKey &&
+            !selectedStatDefinition &&
+            <option value={statKey}>
+              {title(statKey)} (unregistered)
+            </option>}
+
+          {statOptions.map(
+            (stat) =>
+              <option
+                key={stat.id}
+                value={stat.id}
+                disabled={stat.archived === true}
+              >
+                {stat.label}
+                {stat.archived
+                  ? " (archived)"
+                  : ""}
+              </option>
+          )}
         </select></label>
       </div>
 
-      {(purpose === "attack" || purpose === "damage") && primaryActions.length > 0 && <label className="sf-dice-full-label">Saved attack or item<select value={sourceId} onChange={(event) => chooseSource(event.target.value)}>
+      {(purpose === "attack" || purpose === "damage") && primaryActions.length > 0 && <label className="sf-dice-full-label">Saved action or item<select value={sourceId} onChange={(event) => chooseSource(event.target.value)}>
         <option value="">Custom roll</option>
         {primaryActions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select></label>}
 
-      {purpose === "damage" && action && linkedEffects.length > 0 && <label className="sf-dice-full-label">Linked effect<select value={effectId} onChange={(event) => chooseEffect(event.target.value)}>
-        <option value="">Main damage · {action.formula || "No saved dice"}</option>
+      {purpose === "damage" && action && linkedEffects.length > 0 && <label className="sf-dice-full-label">Action effect<select value={effectId} onChange={(event) => chooseEffect(event.target.value)}>
+        <option value="">Main roll · {action.formula || "No saved dice"}</option>
         {linkedEffects.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.formula || "No dice"}</option>)}
       </select></label>}
-      {purpose === "save" && !!opponent?.saves.length && <label className="sf-dice-full-label">Saved attack effect<select value={sourceId} onChange={(event) => chooseSource(event.target.value)}>
+      {purpose === "save" && !!opponent?.saves.length && <label className="sf-dice-full-label">Saved action effect<select value={sourceId} onChange={(event) => chooseSource(event.target.value)}>
         <option value="">Custom saving throw</option>
         {opponent.saves.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select></label>}
-      {purpose === "save" && opponent && !opponent.saves.length && <p>This sheet has no saved attack effects with a saving stat. You can select a stat and difficulty below.</p>}
+      {purpose === "save" && opponent && !opponent.saves.length && <p>This sheet has no saved action effects with a recognized saving stat. You can select a stat and difficulty below.</p>}
 
       <div className="sf-dice-fields">
         <label>Situational / DM adjustment<input type="number" step="1" min="-10000" max="10000" value={adjustment} onChange={(event) => setAdjustment(event.target.value)} /></label>
@@ -300,10 +446,17 @@ function DiceTrayBody({ worldId }: { worldId?: string }) {
     </details>
 
     <div className="sf-dice-preview">
-      {statKey === "none" ? "No stat bonus" : score === undefined ? "Select a sheet with a valid stat score" : `${title(statKey)} ${score} → ${signed(statBonus!)}`}
+      {!statKey
+        ? "No stat bonus"
+        : score === undefined
+          ? "Select a sheet with a valid stat score"
+          : `${selectedStatDefinition?.label ?? title(statKey)} ${score} → ${signed(statBonus!)}`}
       {purpose === "attack" && action && ` · Attack bonus ${signed(action.bonus)}`}
-      {statKey !== "none" && <div className="sf-dice-muted">StoryForge scale: 9–10 = 0; 11–12 = +1; 19–20 = +5.</div>}
-      {(purpose === "damage" || purpose === "save") && <div className="sf-dice-muted">This records the roll. The DM applies damage, armor loss, and conditions.</div>}
+      {statKey &&
+        <div className="sf-dice-muted">
+          {modifierRuleHint}
+        </div>}
+      {(purpose === "damage" || purpose === "save") && <div className="sf-dice-muted">This records the roll. The DM confirms and applies damage, healing, resource changes, armor loss, movement, and conditions.</div>}
     </div>
     <button className="btn btn-primary sf-dice-roll" type="button" onClick={performRoll}>🎲 Roll {formula || "dice"}</button>
     {error && <p role="alert" className="sf-dice-error">{error}</p>}
