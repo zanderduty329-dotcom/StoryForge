@@ -17,6 +17,10 @@ import type {
   PersonalCharacter,
 } from "../lib/personalCharacters";
 
+import {
+  submitPersonalCharacterToCampaign,
+} from "../lib/campaignCharacters";
+
 
 type CharacterEditorDraft = {
   name: string;
@@ -87,6 +91,30 @@ export function HomePage({
     useState<CharacterEditorDraft>(
       emptyCharacterDraft
     );
+
+  /*
+   * STORYFORGE PERSONAL CHARACTER SUBMISSION V1
+   */
+  const [
+    submittingCharacterId,
+    setSubmittingCharacterId,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
+    submissionCampaignId,
+    setSubmissionCampaignId,
+  ] =
+    useState("");
+
+  const [
+    submissionMessage,
+    setSubmissionMessage,
+  ] =
+    useState("");
+
 
   const [
     editingCharacterId,
@@ -315,6 +343,78 @@ export function HomePage({
       ) {
         setEditingCharacterId(
           null
+        );
+      }
+    };
+
+
+  const beginCharacterSubmission =
+    (
+      character:
+        PersonalCharacter
+    ) => {
+      setSubmittingCharacterId(
+        character.id
+      );
+
+      setSubmissionCampaignId(
+        worlds[0]?.id ?? ""
+      );
+
+      setSubmissionMessage("");
+    };
+
+
+  const submitCharacter =
+    (
+      character:
+        PersonalCharacter
+    ) => {
+      if (
+        !submissionCampaignId
+      ) {
+        setSubmissionMessage(
+          "Choose a campaign first."
+        );
+        return;
+      }
+
+      const campaign =
+        worlds.find(
+          (world) =>
+            world.id ===
+            submissionCampaignId
+        );
+
+      if (!campaign) {
+        setSubmissionMessage(
+          "Campaign is no longer available."
+        );
+        return;
+      }
+
+      const result =
+        submitPersonalCharacterToCampaign(
+          campaign.id,
+          character
+        );
+
+      if (
+        result.created
+      ) {
+        setSubmissionMessage(
+          `"${character.name}" was submitted to ${campaign.name} for DM approval.`
+        );
+      } else if (
+        result.submission.status ===
+        "approved"
+      ) {
+        setSubmissionMessage(
+          `"${character.name}" has already been approved for ${campaign.name}.`
+        );
+      } else {
+        setSubmissionMessage(
+          `"${character.name}" is already waiting for DM approval in ${campaign.name}.`
         );
       }
     };
@@ -1051,7 +1151,149 @@ export function HomePage({
                           >
                             Delete
                           </button>
+
+                          <button
+                            className="btn btn-secondary"
+                            onClick={() =>
+                              beginCharacterSubmission(
+                                character
+                              )
+                            }
+                          >
+                            Bring to Campaign
+                          </button>
                         </div>
+
+                        {submittingCharacterId ===
+                          character.id && (
+                          <div
+                            style={{
+                              marginTop:
+                                "14px",
+                              paddingTop:
+                                "14px",
+                              borderTop:
+                                "1px solid var(--border)",
+                            }}
+                          >
+                            <strong>
+                              Submit to Campaign
+                            </strong>
+
+                            {worlds.length === 0 ? (
+                              <p
+                                style={{
+                                  color:
+                                    "var(--text-secondary)",
+                                }}
+                              >
+                                No local campaigns are available yet.
+                                Later, joined online campaigns will
+                                appear here too.
+                              </p>
+                            ) : (
+                              <>
+                                <select
+                                  value={
+                                    submissionCampaignId
+                                  }
+                                  onChange={(event) => {
+                                    setSubmissionCampaignId(
+                                      event.target.value
+                                    );
+
+                                    setSubmissionMessage(
+                                      ""
+                                    );
+                                  }}
+                                  style={{
+                                    width:
+                                      "100%",
+                                    marginTop:
+                                      "10px",
+                                    padding:
+                                      "9px",
+                                    borderRadius:
+                                      "8px",
+                                  }}
+                                >
+                                  {worlds.map(
+                                    (world) => (
+                                      <option
+                                        key={
+                                          world.id
+                                        }
+                                        value={
+                                          world.id
+                                        }
+                                      >
+                                        {
+                                          world.name
+                                        }
+                                      </option>
+                                    )
+                                  )}
+                                </select>
+
+                                <div
+                                  style={{
+                                    display:
+                                      "flex",
+                                    gap:
+                                      "8px",
+                                    flexWrap:
+                                      "wrap",
+                                    marginTop:
+                                      "10px",
+                                  }}
+                                >
+                                  <button
+                                    className="btn"
+                                    onClick={() =>
+                                      submitCharacter(
+                                        character
+                                      )
+                                    }
+                                  >
+                                    Submit for Approval
+                                  </button>
+
+                                  <button
+                                    className="btn btn-secondary"
+                                    onClick={() => {
+                                      setSubmittingCharacterId(
+                                        null
+                                      );
+
+                                      setSubmissionMessage(
+                                        ""
+                                      );
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </>
+                            )}
+
+                            {submissionMessage && (
+                              <p
+                                style={{
+                                  fontSize:
+                                    "13px",
+                                  color:
+                                    "var(--text-secondary)",
+                                  marginBottom:
+                                    0,
+                                }}
+                              >
+                                {
+                                  submissionMessage
+                                }
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
