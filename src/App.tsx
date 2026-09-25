@@ -157,7 +157,7 @@ const fetchWorlds = useCallback(() => {
       <main className="main-content">
         <div className="top-bar">
           <h1>
-            {page === "home" && "StoryForge Campaigns"}
+            {page === "home" && "StoryForge Home"}
               {page === "world" && "DM Screen"}
             {page === "monsters" && "Monster & Creature Archive"}
             {page === "locations" && "Location & World Archive"}
